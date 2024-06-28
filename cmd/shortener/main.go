@@ -19,8 +19,8 @@ func main() {
 
 func run() error {
 	mux := http.NewServeMux()
-	mux.Handle(`/{id}`, contentTypeMiddleware(http.HandlerFunc(getHandler)))
-	mux.Handle(`/`, contentTypeMiddleware(http.HandlerFunc(postHandler)))
+	mux.Handle(`/{id}`, contentTypeMiddleware(http.HandlerFunc(getRequestHandler)))
+	mux.Handle(`/`, contentTypeMiddleware(http.HandlerFunc(postRequestHandler)))
 
 	return http.ListenAndServe(`:8080`, mux)
 }
@@ -37,28 +37,7 @@ func contentTypeMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func getHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		return
-	}
-
-	parts := strings.Split(r.URL.Path, "/")
-
-	if len(parts) != 2 {
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-
-	key := parts[1]
-
-	if val, ok := urlMap[key]; ok {
-		w.Header().Set("Location", val)
-	}
-
-	w.WriteHeader(http.StatusTemporaryRedirect)
-}
-
-func postHandler(w http.ResponseWriter, r *http.Request) {
+func postRequestHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		return
 	}
@@ -74,5 +53,31 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	urlMap[key] = string(body)
 
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("http://" + r.Host + "/" + key))
+
+	_, err = w.Write([]byte("http://" + r.Host + "/" + key))
+	if err != nil {
+		panic(err)
+	}
+}
+
+func getRequestHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+
+	if len(parts) != 2 {
+		http.Error(w, "Invalid URL", http.StatusBadRequest)
+		return
+	}
+
+	val, ok := urlMap[parts[1]]
+	if !ok {
+		http.Error(w, "No info about requested route", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Location", val)
+	w.WriteHeader(http.StatusTemporaryRedirect)
 }
