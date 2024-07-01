@@ -28,7 +28,7 @@ func TestPostRequestHandler(t *testing.T) {
 			want: want{
 				code:        http.StatusCreated,
 				contentType: "text/plain",
-				content:     "http://example.com/aHR0cHM6",
+				content:     "/aHR0cHM6",
 			},
 		},
 		{
@@ -43,25 +43,29 @@ func TestPostRequestHandler(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
-			r.Header.Set("Content-Type", "text/plain")
-			w := httptest.NewRecorder()
-			handler := contentTypeMiddleware(http.HandlerFunc(postRequestHandler))
+		router := Router()
 
-			handler.ServeHTTP(w, r)
-			result := w.Result()
+		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
+		r.Header.Set("Content-Type", "text/plain")
+		w := httptest.NewRecorder()
 
-			assert.Equal(t, tt.want.code, result.StatusCode)
-			assert.Equal(t, tt.want.contentType, result.Header.Get("Content-Type"))
+		router.ServeHTTP(w, r)
+		result := w.Result()
 
-			resultURL, err := io.ReadAll(result.Body)
-			require.NoError(t, err)
-			err = result.Body.Close()
-			require.NoError(t, err)
+		assert.Equal(t, tt.want.code, result.StatusCode)
+		assert.Equal(t, tt.want.contentType, result.Header.Get("Content-Type"))
 
+		resultURL, err := io.ReadAll(result.Body)
+		require.NoError(t, err)
+		err = result.Body.Close()
+		require.NoError(t, err)
+
+		if tt.want.code == http.StatusCreated {
+			expectedURL := "http://" + r.Host + tt.want.content
+			assert.Equal(t, expectedURL, string(resultURL))
+		} else {
 			assert.Equal(t, tt.want.content, string(resultURL))
-		})
+		}
 	}
 }
 
@@ -98,7 +102,7 @@ func TestGetRequestHandler(t *testing.T) {
 			name:       "negative test #2",
 			requestURI: "/aHR0cHM6/123/qwewqe",
 			want: want{
-				code:        http.StatusBadRequest,
+				code:        http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
 				location:    "",
 			},
@@ -106,19 +110,20 @@ func TestGetRequestHandler(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodGet, tt.requestURI, nil)
-			r.Header.Set("Content-Type", "text/plain")
-			w := httptest.NewRecorder()
+		router := Router()
 
-			handler := contentTypeMiddleware(http.HandlerFunc(getRequestHandler))
-			handler.ServeHTTP(w, r)
-			result := w.Result()
-			defer result.Body.Close()
+		r := httptest.NewRequest(http.MethodGet, tt.requestURI, nil)
+		r.Header.Set("Content-Type", "text/plain")
+		w := httptest.NewRecorder()
 
-			assert.Equal(t, tt.want.code, result.StatusCode)
-			assert.Equal(t, tt.want.contentType, result.Header.Get("Content-Type"))
-			assert.Equal(t, tt.want.location, result.Header.Get("Location"))
-		})
+		router.ServeHTTP(w, r)
+		result := w.Result()
+
+		assert.Equal(t, tt.want.code, result.StatusCode)
+		assert.Equal(t, tt.want.contentType, result.Header.Get("Content-Type"))
+		assert.Equal(t, tt.want.location, result.Header.Get("Location"))
+
+		err := result.Body.Close()
+		require.NoError(t, err)
 	}
 }

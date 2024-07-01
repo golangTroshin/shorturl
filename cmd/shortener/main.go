@@ -4,7 +4,8 @@ import (
 	"encoding/base64"
 	"io"
 	"net/http"
-	"strings"
+
+	"github.com/go-chi/chi"
 )
 
 const ContentTypePlainText = "text/plain"
@@ -12,36 +13,25 @@ const ContentTypePlainText = "text/plain"
 var urlMap = make(map[string]string)
 
 func main() {
-	if err := run(); err != nil {
+	if err := http.ListenAndServe(`:8080`, Router()); err != nil {
 		panic(err)
 	}
 }
 
-func run() error {
-	mux := http.NewServeMux()
-	mux.Handle(`/{id}`, contentTypeMiddleware(http.HandlerFunc(getRequestHandler)))
-	mux.Handle(`/`, contentTypeMiddleware(http.HandlerFunc(postRequestHandler)))
+func Router() chi.Router {
+	r := chi.NewRouter()
 
-	return http.ListenAndServe(`:8080`, mux)
-}
-
-func contentTypeMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// if r.Header.Get("Content-Type") != ContentTypePlainText {
-		// 	http.Error(w, "Unsupported Media Type", http.StatusBadRequest)
-		// 	return
-		// }
-
-		w.Header().Set("Content-Type", "text/plain")
-		next.ServeHTTP(w, r)
+	r.Route("/", func(r chi.Router) {
+		r.Post("/", postRequestHandler)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", getRequestHandler)
+		})
 	})
+
+	return r
 }
 
 func postRequestHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		return
-	}
-
 	body, err := io.ReadAll(r.Body)
 
 	if err != nil || len(body) == 0 {
@@ -49,9 +39,10 @@ func postRequestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := base64.StdEncoding.EncodeToString(body)[:8]
+	key := base64.URLEncoding.EncodeToString(body)[:8]
 	urlMap[key] = string(body)
 
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 
 	_, err = w.Write([]byte("http://" + r.Host + "/" + key))
@@ -61,23 +52,19 @@ func postRequestHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getRequestHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		return
-	}
-
-	parts := strings.Split(r.URL.Path, "/")
-
-	if len(parts) != 2 {
+	id := chi.URLParam(r, "id")
+	if id == "" {
 		http.Error(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
 
-	val, ok := urlMap[parts[1]]
+	val, ok := urlMap[id]
 	if !ok {
 		http.Error(w, "No info about requested route", http.StatusBadRequest)
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Location", val)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
