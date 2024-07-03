@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golangTroshin/shorturl/cmd/shortener/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -61,7 +62,7 @@ func TestPostRequestHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		if tt.want.code == http.StatusCreated {
-			expectedURL := "http://" + r.Host + tt.want.content
+			expectedURL := config.Options.FlagBaseShortURLAddr + tt.want.content
 			assert.Equal(t, expectedURL, string(resultURL))
 		} else {
 			assert.Equal(t, tt.want.content, string(resultURL))

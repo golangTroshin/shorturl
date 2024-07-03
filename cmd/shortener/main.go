@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/golangTroshin/shorturl/cmd/shortener/config"
 )
 
 const ContentTypePlainText = "text/plain"
@@ -13,7 +14,9 @@ const ContentTypePlainText = "text/plain"
 var urlMap = make(map[string]string)
 
 func main() {
-	if err := http.ListenAndServe(`:8080`, Router()); err != nil {
+	config.ParseFlags()
+
+	if err := http.ListenAndServe(config.Options.FlagRunAddr, Router()); err != nil {
 		panic(err)
 	}
 }
@@ -45,7 +48,7 @@ func postRequestHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 
-	_, err = w.Write([]byte("http://" + r.Host + "/" + key))
+	_, err = w.Write([]byte(config.Options.FlagBaseShortURLAddr + "/" + key))
 	if err != nil {
 		panic(err)
 	}
