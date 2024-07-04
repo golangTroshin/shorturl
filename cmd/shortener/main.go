@@ -1,73 +1,39 @@
 package main
 
 import (
-	"encoding/base64"
-	"io"
+	"log"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi"
-	"github.com/golangTroshin/shorturl/cmd/shortener/config"
+	"github.com/golangTroshin/shorturl/internal/app/config"
+	"github.com/golangTroshin/shorturl/internal/app/handlers"
+	"github.com/golangTroshin/shorturl/internal/app/stores"
 )
 
-const ContentTypePlainText = "text/plain"
-
-var urlMap = make(map[string]string)
-
 func main() {
-	config.ParseFlags()
+	if err := config.ParseFlags(); err != nil {
+		log.Fatalf("error ocured while parsing flags: %v", err)
+		os.Exit(1)
+	}
 
-	if err := http.ListenAndServe(config.Options.FlagRunAddr, Router()); err != nil {
-		panic(err)
+	store := stores.NewURLStore()
+
+	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
+		log.Fatalf("failed to start server: %v", err)
+		os.Exit(1)
 	}
 }
 
-func Router() chi.Router {
+func Router(store *stores.URLStore) chi.Router {
 	r := chi.NewRouter()
 
 	r.Route("/", func(r chi.Router) {
-		r.Post("/", postRequestHandler)
+		r.Post("/", handlers.PostRequestHandler(store))
 		r.Route("/{id}", func(r chi.Router) {
-			r.Get("/", getRequestHandler)
+			r.Get("/", handlers.GetRequestHandler(store))
 		})
 	})
 
 	return r
-}
-
-func postRequestHandler(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-
-	if err != nil || len(body) == 0 {
-		http.Error(w, "Empty body", http.StatusBadRequest)
-		return
-	}
-
-	key := base64.URLEncoding.EncodeToString(body)[:8]
-	urlMap[key] = string(body)
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusCreated)
-
-	_, err = w.Write([]byte(config.Options.FlagBaseShortURLAddr + "/" + key))
-	if err != nil {
-		panic(err)
-	}
-}
-
-func getRequestHandler(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-
-	val, ok := urlMap[id]
-	if !ok {
-		http.Error(w, "No info about requested route", http.StatusBadRequest)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Location", val)
-	w.WriteHeader(http.StatusTemporaryRedirect)
 }
