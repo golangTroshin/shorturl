@@ -27,6 +27,8 @@ func Router(store *stores.URLStore) chi.Router {
 	r := chi.NewRouter()
 
 	r.Post("/", logger.LoggingWrapper(handlers.PostRequestHandler(store)))
+	r.Post("/api/shorten", logger.LoggingWrapper(handlers.APIPostHandler(store)))
+
 	r.Get("/{id}", logger.LoggingWrapper(handlers.GetRequestHandler(store)))
 
 	return r

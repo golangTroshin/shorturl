@@ -20,8 +20,7 @@ func PostRequestHandler(store *stores.URLStore) http.Handler {
 			return
 		}
 
-		key := stores.GenerateKey(body)
-		store.Set(key, string(body))
+		key := store.Set(body)
 
 		w.Header().Set("Content-Type", ContentTypePlainText)
 		w.WriteHeader(http.StatusCreated)

@@ -17,10 +17,14 @@ func NewURLStore() *URLStore {
 	}
 }
 
-func (store *URLStore) Set(key string, value string) {
+func (store *URLStore) Set(value []byte) string {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	store.urlMap[key] = value
+
+	key := generateKey(value)
+	store.urlMap[key] = string(value)
+
+	return key
 }
 
 func (store *URLStore) Get(key string) (string, bool) {
@@ -30,7 +34,7 @@ func (store *URLStore) Get(key string) (string, bool) {
 	return val, ok
 }
 
-func GenerateKey(body []byte) string {
+func generateKey(body []byte) string {
 	hash := sha256.Sum256(body)
 
 	return base64.URLEncoding.EncodeToString(hash[:])[:8]
