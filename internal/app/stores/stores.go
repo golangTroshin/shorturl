@@ -7,7 +7,7 @@ import (
 )
 
 type URLStore struct {
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	urlMap map[string]string
 }
 
@@ -24,8 +24,8 @@ func (store *URLStore) Set(key string, value string) {
 }
 
 func (store *URLStore) Get(key string) (string, bool) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
+	store.mu.RLock()
+	defer store.mu.RUnlock()
 	val, ok := store.urlMap[key]
 	return val, ok
 }
