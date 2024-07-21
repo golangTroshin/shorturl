@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi"
@@ -11,8 +12,8 @@ import (
 
 const ContentTypePlainText = "text/plain"
 
-func PostRequestHandler(store *stores.URLStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func PostRequestHandler(store *stores.URLStore) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
 			http.Error(w, "Empty body", http.StatusBadRequest)
@@ -27,13 +28,16 @@ func PostRequestHandler(store *stores.URLStore) http.HandlerFunc {
 
 		_, err = w.Write([]byte(config.Options.FlagBaseURL + "/" + key))
 		if err != nil {
-			panic(err)
+			log.Panicf("Unable to write reponse: %v", err)
+			http.Error(w, "Unable to write reponse", http.StatusNotFound)
 		}
 	}
+
+	return http.HandlerFunc(fn)
 }
 
-func GetRequestHandler(store *stores.URLStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func GetRequestHandler(store *stores.URLStore) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
 			http.Error(w, "Invalid URL", http.StatusBadRequest)
@@ -50,4 +54,6 @@ func GetRequestHandler(store *stores.URLStore) http.HandlerFunc {
 		w.Header().Set("Location", val)
 		w.WriteHeader(http.StatusTemporaryRedirect)
 	}
+
+	return http.HandlerFunc(fn)
 }
