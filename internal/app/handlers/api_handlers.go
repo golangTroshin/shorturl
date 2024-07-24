@@ -19,7 +19,7 @@ type ResponseShortURL struct {
 	ShortURL string `json:"result"`
 }
 
-func APIPostHandler(store *stores.URLStore) http.Handler {
+func APIPostHandler(store *stores.URLStore) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		var url RequestURL
 

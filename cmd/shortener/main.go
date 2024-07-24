@@ -8,6 +8,7 @@ import (
 	"github.com/golangTroshin/shorturl/internal/app/config"
 	"github.com/golangTroshin/shorturl/internal/app/handlers"
 	"github.com/golangTroshin/shorturl/internal/app/logger"
+	"github.com/golangTroshin/shorturl/internal/app/middleware"
 	"github.com/golangTroshin/shorturl/internal/app/stores"
 )
 
@@ -26,10 +27,10 @@ func main() {
 func Router(store *stores.URLStore) chi.Router {
 	r := chi.NewRouter()
 
-	r.Post("/", logger.LoggingWrapper(handlers.PostRequestHandler(store)))
-	r.Post("/api/shorten", logger.LoggingWrapper(handlers.APIPostHandler(store)))
+	r.Post("/", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.PostRequestHandler(store))))
+	r.Post("/api/shorten", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.APIPostHandler(store))))
 
-	r.Get("/{id}", logger.LoggingWrapper(handlers.GetRequestHandler(store)))
+	r.Get("/{id}", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetRequestHandler(store))))
 
 	return r
 }
