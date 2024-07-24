@@ -12,7 +12,7 @@ import (
 
 const ContentTypePlainText = "text/plain"
 
-func PostRequestHandler(store *stores.URLStore) http.Handler {
+func PostRequestHandler(store *stores.URLStore) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -35,7 +35,7 @@ func PostRequestHandler(store *stores.URLStore) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func GetRequestHandler(store *stores.URLStore) http.Handler {
+func GetRequestHandler(store *stores.URLStore) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
