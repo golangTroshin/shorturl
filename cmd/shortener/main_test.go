@@ -11,7 +11,7 @@ import (
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
 	"github.com/golangTroshin/shorturl/internal/app/handlers"
-	"github.com/golangTroshin/shorturl/internal/app/stores"
+	"github.com/golangTroshin/shorturl/internal/app/storage"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,8 +46,15 @@ func TestPostRequestHandler(t *testing.T) {
 		},
 	}
 
+	if err := config.ParseFlags(); err != nil {
+		log.Fatalf("error ocured while parsing flags: %v", err)
+	}
+
 	for _, tt := range tests {
-		store := stores.NewURLStore()
+		store, err := storage.InitURLStore()
+		if err != nil {
+			log.Fatalf("failed to init storage: %v", err)
+		}
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
@@ -124,10 +131,17 @@ func TestAPIPostHandler(t *testing.T) {
 		},
 	}
 
+	if err := config.ParseFlags(); err != nil {
+		log.Fatalf("error ocured while parsing flags: %v", err)
+	}
+
 	var responseShortURL handlers.ResponseShortURL
 
 	for _, tt := range tests {
-		store := stores.NewURLStore()
+		store, err := storage.InitURLStore()
+		if err != nil {
+			log.Fatalf("failed to init storage: %v", err)
+		}
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodPost, "/api/shorten", strings.NewReader(tt.body))
@@ -209,8 +223,15 @@ func TestGetRequestHandler(t *testing.T) {
 		},
 	}
 
+	if err := config.ParseFlags(); err != nil {
+		log.Fatalf("error ocured while parsing flags: %v", err)
+	}
+
 	for _, tt := range tests {
-		store := stores.NewURLStore()
+		store, err := storage.InitURLStore()
+		if err != nil {
+			log.Fatalf("failed to init storage: %v", err)
+		}
 		store.Set([]byte("https://practicum.yandex.ru/"))
 		router := Router(store)
 
@@ -233,7 +254,7 @@ func TestGetRequestHandler(t *testing.T) {
 			t.Errorf("[%s] locations are not equal: expected: %s, result: %s ", tt.name, tt.want.location, result.Header.Get("Location"))
 		}
 
-		err := result.Body.Close()
+		err = result.Body.Close()
 		require.NoError(t, err)
 	}
 }

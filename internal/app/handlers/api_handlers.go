@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/stores"
+	"github.com/golangTroshin/shorturl/internal/app/storage"
 )
 
 const ContentTypeJSON = "application/json"
@@ -19,7 +19,7 @@ type ResponseShortURL struct {
 	ShortURL string `json:"result"`
 }
 
-func APIPostHandler(store *stores.URLStore) http.HandlerFunc {
+func APIPostHandler(store *storage.URLStore) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		var url RequestURL
 
@@ -28,13 +28,23 @@ func APIPostHandler(store *stores.URLStore) http.HandlerFunc {
 			return
 		}
 
-		key := store.Set([]byte(url.URL))
+		urlObj := store.Set([]byte(url.URL))
+
+		Producer, err := storage.NewProducer(config.Options.StoragePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer Producer.Close()
+
+		if err := Producer.WriteURL(&urlObj); err != nil {
+			log.Fatal(err)
+		}
 
 		w.Header().Set("Content-Type", ContentTypeJSON)
 		w.WriteHeader(http.StatusCreated)
 
 		var result ResponseShortURL
-		result.ShortURL = config.Options.FlagBaseURL + "/" + key
+		result.ShortURL = config.Options.FlagBaseURL + "/" + urlObj.ShortURL
 
 		if err := json.NewEncoder(w).Encode(&result); err != nil {
 			log.Panicf("Unable to write reponse: %v", err)

@@ -7,14 +7,16 @@ import (
 	"strings"
 )
 
-var allowedEncodingTypes = map[string]struct{}{
-	"gzip": {},
-}
+var (
+	allowedEncodingTypes = map[string]struct{}{
+		"gzip": {},
+	}
 
-var allowedContentTypes = map[string]struct{}{
-	"application/json": {},
-	"text/html":        {},
-}
+	allowedContentTypes = map[string]struct{}{
+		"application/json": {},
+		"text/html":        {},
+	}
+)
 
 type compressWriter struct {
 	w  http.ResponseWriter

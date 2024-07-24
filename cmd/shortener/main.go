@@ -9,7 +9,7 @@ import (
 	"github.com/golangTroshin/shorturl/internal/app/handlers"
 	"github.com/golangTroshin/shorturl/internal/app/logger"
 	"github.com/golangTroshin/shorturl/internal/app/middleware"
-	"github.com/golangTroshin/shorturl/internal/app/stores"
+	"github.com/golangTroshin/shorturl/internal/app/storage"
 )
 
 func main() {
@@ -17,14 +17,17 @@ func main() {
 		log.Fatalf("error ocured while parsing flags: %v", err)
 	}
 
-	store := stores.NewURLStore()
+	store, err := storage.InitURLStore()
+	if err != nil {
+		log.Fatalf("failed to init storage: %v", err)
+	}
 
 	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
 }
 
-func Router(store *stores.URLStore) chi.Router {
+func Router(store *storage.URLStore) chi.Router {
 	r := chi.NewRouter()
 
 	r.Post("/", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.PostRequestHandler(store))))
