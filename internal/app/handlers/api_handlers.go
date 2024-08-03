@@ -32,12 +32,12 @@ func APIPostHandler(store *storage.URLStore) http.HandlerFunc {
 
 		Producer, err := storage.NewProducer(config.Options.StoragePath)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 		defer Producer.Close()
 
 		if err := Producer.WriteURL(&urlObj); err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 
 		w.Header().Set("Content-Type", ContentTypeJSON)
@@ -47,7 +47,7 @@ func APIPostHandler(store *storage.URLStore) http.HandlerFunc {
 		result.ShortURL = config.Options.FlagBaseURL + "/" + urlObj.ShortURL
 
 		if err := json.NewEncoder(w).Encode(&result); err != nil {
-			log.Panicf("Unable to write reponse: %v", err)
+			log.Printf("Unable to write reponse: %v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

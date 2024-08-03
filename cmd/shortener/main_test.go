@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -47,13 +46,13 @@ func TestPostRequestHandler(t *testing.T) {
 	}
 
 	if err := config.ParseFlags(); err != nil {
-		log.Fatalf("error ocured while parsing flags: %v", err)
+		t.Fatalf("error ocured while parsing flags: %v", err)
 	}
 
 	for _, tt := range tests {
 		store, err := storage.InitURLStore()
 		if err != nil {
-			log.Fatalf("failed to init storage: %v", err)
+			t.Fatalf("failed to init storage: %v", err)
 		}
 		router := Router(store)
 
@@ -102,7 +101,7 @@ func TestAPIPostHandler(t *testing.T) {
 
 	body, err := json.Marshal(request)
 	if err != nil {
-		log.Printf("error while Marshal result: %s", err.Error())
+		t.Fatalf("error while Marshal result: %s", err.Error())
 		return
 	}
 
@@ -132,7 +131,7 @@ func TestAPIPostHandler(t *testing.T) {
 	}
 
 	if err := config.ParseFlags(); err != nil {
-		log.Fatalf("error ocured while parsing flags: %v", err)
+		t.Fatalf("error ocured while parsing flags: %v", err)
 	}
 
 	var responseShortURL handlers.ResponseShortURL
@@ -140,7 +139,7 @@ func TestAPIPostHandler(t *testing.T) {
 	for _, tt := range tests {
 		store, err := storage.InitURLStore()
 		if err != nil {
-			log.Fatalf("failed to init storage: %v", err)
+			t.Fatalf("failed to init storage: %v", err)
 		}
 		router := Router(store)
 
@@ -224,13 +223,13 @@ func TestGetRequestHandler(t *testing.T) {
 	}
 
 	if err := config.ParseFlags(); err != nil {
-		log.Fatalf("error ocured while parsing flags: %v", err)
+		t.Fatalf("error ocured while parsing flags: %v", err)
 	}
 
 	for _, tt := range tests {
 		store, err := storage.InitURLStore()
 		if err != nil {
-			log.Fatalf("failed to init storage: %v", err)
+			t.Fatalf("failed to init storage: %v", err)
 		}
 		store.Set([]byte("https://practicum.yandex.ru/"))
 		router := Router(store)

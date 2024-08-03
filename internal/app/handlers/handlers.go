@@ -24,12 +24,12 @@ func PostRequestHandler(store *storage.URLStore) http.HandlerFunc {
 
 		Producer, err := storage.NewProducer(config.Options.StoragePath)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 		defer Producer.Close()
 
 		if err := Producer.WriteURL(&url); err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 
 		w.Header().Set("Content-Type", ContentTypePlainText)

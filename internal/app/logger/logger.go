@@ -35,7 +35,7 @@ func LoggingWrapper(h http.HandlerFunc) http.HandlerFunc {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
 		logger, err := zap.NewDevelopment()
 		if err != nil {
-			log.Fatalf("error ocured while creating zap logger: %v", err)
+			log.Printf("error ocured while creating zap logger: %v", err)
 		}
 		defer logger.Sync()
 
@@ -51,7 +51,6 @@ func LoggingWrapper(h http.HandlerFunc) http.HandlerFunc {
 			ResponseWriter: w,
 			responseData:   responseData,
 		}
-		h.ServeHTTP(&lw, r)
 
 		sugar.Infoln(
 			"uri", r.RequestURI,
@@ -60,6 +59,8 @@ func LoggingWrapper(h http.HandlerFunc) http.HandlerFunc {
 			"duration", time.Since(start),
 			"size", responseData.size,
 		)
+
+		h.ServeHTTP(&lw, r)
 	}
 
 	return http.HandlerFunc(logFn)
