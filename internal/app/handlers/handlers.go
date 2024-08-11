@@ -14,7 +14,7 @@ import (
 
 const ContentTypePlainText = "text/plain"
 
-func PostRequestHandler(store *storage.URLStore) http.HandlerFunc {
+func PostRequestHandler(storage storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -22,15 +22,8 @@ func PostRequestHandler(store *storage.URLStore) http.HandlerFunc {
 			return
 		}
 
-		url := store.Set(body)
-
-		Producer, err := storage.NewProducer(config.Options.StoragePath)
+		url, err := storage.Set(r.Context(), body)
 		if err != nil {
-			log.Println(err)
-		}
-		defer Producer.Close()
-
-		if err := Producer.WriteURL(&url); err != nil {
 			log.Println(err)
 		}
 
@@ -47,7 +40,7 @@ func PostRequestHandler(store *storage.URLStore) http.HandlerFunc {
 	return http.HandlerFunc(fn)
 }
 
-func GetRequestHandler(store *storage.URLStore) http.HandlerFunc {
+func GetRequestHandler(storage storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -55,8 +48,8 @@ func GetRequestHandler(store *storage.URLStore) http.HandlerFunc {
 			return
 		}
 
-		val, ok := store.Get(id)
-		if !ok {
+		val, err := storage.Get(r.Context(), id)
+		if err != nil {
 			http.Error(w, "No info about requested route", http.StatusNotFound)
 			return
 		}
@@ -79,7 +72,7 @@ func DatabasePing() http.HandlerFunc {
 
 		err = db.Ping()
 		if err != nil {
-			log.Printf("Unable to write reponse: %v", err.Error())
+			log.Printf("Unable to write reponse: %v", err)
 			http.Error(w, "Unable to reach database", http.StatusInternalServerError)
 		}
 

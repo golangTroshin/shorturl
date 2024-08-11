@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -50,10 +51,7 @@ func TestPostRequestHandler(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		store, err := storage.InitURLStore()
-		if err != nil {
-			t.Fatalf("failed to init storage: %v", err)
-		}
+		store := storage.NewMemoryStore()
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
@@ -137,10 +135,7 @@ func TestAPIPostHandler(t *testing.T) {
 	var responseShortURL handlers.ResponseShortURL
 
 	for _, tt := range tests {
-		store, err := storage.InitURLStore()
-		if err != nil {
-			t.Fatalf("failed to init storage: %v", err)
-		}
+		store := storage.NewMemoryStore()
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodPost, "/api/shorten", strings.NewReader(tt.body))
@@ -227,11 +222,8 @@ func TestGetRequestHandler(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		store, err := storage.InitURLStore()
-		if err != nil {
-			t.Fatalf("failed to init storage: %v", err)
-		}
-		store.Set([]byte("https://practicum.yandex.ru/"))
+		store := storage.NewMemoryStore()
+		store.Set(context.Background(), []byte("https://practicum.yandex.ru/"))
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodGet, tt.requestURI, nil)
@@ -253,7 +245,7 @@ func TestGetRequestHandler(t *testing.T) {
 			t.Errorf("[%s] locations are not equal: expected: %s, result: %s ", tt.name, tt.want.location, result.Header.Get("Location"))
 		}
 
-		err = result.Body.Close()
+		err := result.Body.Close()
 		require.NoError(t, err)
 	}
 }
