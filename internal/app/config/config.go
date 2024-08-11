@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"sync"
 
 	"github.com/caarlos0/env/v6"
@@ -33,13 +32,10 @@ func ParseFlags() error {
 	}
 
 	once.Do(func() {
-		ps := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
-			`localhost`, `admin`, `qwer1234`, `shorturl`)
-
 		flag.StringVar(&Options.FlagServiceAddress, "a", ":8080", "address and port to run server")
 		flag.StringVar(&Options.FlagBaseURL, "b", "http://localhost:8080", "base result url")
-		flag.StringVar(&Options.StoragePath, "f", "storage", "storage path")
-		flag.StringVar(&Options.DatabaseDsn, "d", ps, "database connection")
+		flag.StringVar(&Options.StoragePath, "f", "", "storage path")
+		flag.StringVar(&Options.DatabaseDsn, "d", "", "database connection")
 	})
 
 	if Config.ServerAddress != "" {

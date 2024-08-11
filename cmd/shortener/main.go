@@ -17,17 +17,19 @@ func main() {
 		log.Fatalf("error ocured while parsing flags: %v", err)
 	}
 
-	store, err := storage.InitURLStore()
+	store, err := storage.GetStorageByConfig()
 	if err != nil {
-		log.Fatalf("failed to init storage: %v", err)
+		log.Fatalf("failed to init store: %v", err)
 	}
+
+	defer storage.CloseDB()
 
 	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
 }
 
-func Router(store *storage.URLStore) chi.Router {
+func Router(store storage.Storage) chi.Router {
 	r := chi.NewRouter()
 
 	r.Post("/", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.PostRequestHandler(store))))

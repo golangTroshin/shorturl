@@ -19,7 +19,7 @@ type ResponseShortURL struct {
 	ShortURL string `json:"result"`
 }
 
-func APIPostHandler(store *storage.URLStore) http.HandlerFunc {
+func APIPostHandler(storage storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		var url RequestURL
 
@@ -28,15 +28,8 @@ func APIPostHandler(store *storage.URLStore) http.HandlerFunc {
 			return
 		}
 
-		urlObj := store.Set([]byte(url.URL))
-
-		Producer, err := storage.NewProducer(config.Options.StoragePath)
+		urlObj, err := storage.Set(r.Context(), []byte(url.URL))
 		if err != nil {
-			log.Println(err)
-		}
-		defer Producer.Close()
-
-		if err := Producer.WriteURL(&urlObj); err != nil {
 			log.Println(err)
 		}
 
