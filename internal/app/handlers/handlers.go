@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"io"
 	"log"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/golangTroshin/shorturl/internal/app/config"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const ContentTypePlainText = "text/plain"
@@ -37,7 +39,7 @@ func PostRequestHandler(store *storage.URLStore) http.HandlerFunc {
 
 		_, err = w.Write([]byte(config.Options.FlagBaseURL + "/" + url.ShortURL))
 		if err != nil {
-			log.Panicf("Unable to write reponse: %v", err)
+			log.Printf("Unable to write reponse: %v", err)
 			http.Error(w, "Unable to write reponse", http.StatusNotFound)
 		}
 	}
@@ -62,6 +64,26 @@ func GetRequestHandler(store *storage.URLStore) http.HandlerFunc {
 		w.Header().Set("Content-Type", ContentTypePlainText)
 		w.Header().Set("Location", val)
 		w.WriteHeader(http.StatusTemporaryRedirect)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func DatabasePing() http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		db, err := sql.Open("pgx", config.Options.DatabaseDsn)
+
+		if err != nil {
+			http.Error(w, "Unable to connect to database", http.StatusInternalServerError)
+		}
+
+		err = db.Ping()
+		if err != nil {
+			log.Printf("Unable to write reponse: %v", err.Error())
+			http.Error(w, "Unable to reach database", http.StatusInternalServerError)
+		}
+
+		defer db.Close()
 	}
 
 	return http.HandlerFunc(fn)

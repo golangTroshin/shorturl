@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"sync"
 
 	"github.com/caarlos0/env/v6"
@@ -12,12 +13,14 @@ var (
 		FlagServiceAddress string
 		FlagBaseURL        string
 		StoragePath        string
+		DatabaseDsn        string
 	}
 
 	Config struct {
 		ServerAddress   string `env:"SERVER_ADDRESS"`
 		BaseURL         string `env:"BASE_URL"`
 		FileStoragePath string `env:"FILE_STORAGE_PATH"`
+		DatabaseDsn     string `env:"DATABASE_DSN"`
 	}
 
 	once sync.Once
@@ -30,9 +33,13 @@ func ParseFlags() error {
 	}
 
 	once.Do(func() {
+		ps := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+			`localhost`, `admin`, `qwer1234`, `shorturl`)
+
 		flag.StringVar(&Options.FlagServiceAddress, "a", ":8080", "address and port to run server")
 		flag.StringVar(&Options.FlagBaseURL, "b", "http://localhost:8080", "base result url")
 		flag.StringVar(&Options.StoragePath, "f", "storage", "storage path")
+		flag.StringVar(&Options.DatabaseDsn, "d", ps, "database connection")
 	})
 
 	if Config.ServerAddress != "" {
@@ -45,6 +52,10 @@ func ParseFlags() error {
 
 	if Config.FileStoragePath != "" {
 		Options.StoragePath = Config.FileStoragePath
+	}
+
+	if Config.DatabaseDsn != "" {
+		Options.DatabaseDsn = Config.DatabaseDsn
 	}
 
 	flag.Parse()

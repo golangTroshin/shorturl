@@ -34,6 +34,7 @@ func Router(store *storage.URLStore) chi.Router {
 	r.Post("/api/shorten", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.APIPostHandler(store))))
 
 	r.Get("/{id}", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetRequestHandler(store))))
+	r.Get("/ping", logger.LoggingWrapper(handlers.DatabasePing()))
 
 	return r
 }
