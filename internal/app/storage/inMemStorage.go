@@ -29,17 +29,26 @@ func (store *MemoryStore) Get(ctx context.Context, key string) (string, error) {
 	return val.OriginalURL, nil
 }
 
-func (store *MemoryStore) Set(ctx context.Context, value []byte) (URL, error) {
+func (store *MemoryStore) Set(ctx context.Context, value string) (URL, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	key := generateShortUrl(value)
-	url := URL{
-		UUID:        len(store.urlList) + 1,
-		ShortURL:    key,
-		OriginalURL: string(value),
-	}
-	store.urlList[key] = url
+	url := getURLObject(value)
+	store.urlList[url.ShortURL] = url
 
 	return url, nil
+}
+
+func (store *MemoryStore) SetBatch(ctx context.Context, urls []RequestBodyBanch) ([]URL, error) {
+	var URLs []URL
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	for _, url := range urls {
+		url := getURLObjectWithID(url.CorrelationID, url.OriginalURL)
+		store.urlList[url.ShortURL] = url
+		URLs = append(URLs, url)
+	}
+
+	return URLs, nil
 }

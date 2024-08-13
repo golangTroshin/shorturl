@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/handlers"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 	"github.com/stretchr/testify/require"
 )
@@ -94,7 +93,7 @@ func TestAPIPostHandler(t *testing.T) {
 		contentType string
 		content     string
 	}
-	var request handlers.RequestURL
+	var request storage.RequestURL
 	request.URL = "https://practicum.yandex.ru/"
 
 	body, err := json.Marshal(request)
@@ -132,7 +131,7 @@ func TestAPIPostHandler(t *testing.T) {
 		t.Fatalf("error ocured while parsing flags: %v", err)
 	}
 
-	var responseShortURL handlers.ResponseShortURL
+	var responseShortURL storage.ResponseShortURL
 
 	for _, tt := range tests {
 		store := storage.NewMemoryStore()
@@ -223,7 +222,7 @@ func TestGetRequestHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		store := storage.NewMemoryStore()
-		store.Set(context.Background(), []byte("https://practicum.yandex.ru/"))
+		store.Set(context.Background(), "https://practicum.yandex.ru/")
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodGet, tt.requestURI, nil)

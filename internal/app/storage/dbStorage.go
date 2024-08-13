@@ -70,39 +70,85 @@ func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error)
 	return originalURL, nil
 }
 
-func (store *DatabaseStore) Set(ctx context.Context, value []byte) (URL, error) {
-	key := generateShortUrl(value)
-	url := URL{
-		UUID:        0,
-		ShortURL:    key,
-		OriginalURL: string(value),
+func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) {
+	url := getURLObject(value)
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return url, err
 	}
 
-	query := `
-		INSERT INTO urls (originUrl, shortUrl)
-		VALUES ($1, $2)
-		ON CONFLICT (originUrl)
-		DO UPDATE SET shortUrl = EXCLUDED.shortUrl
-		RETURNING id;`
+	defer tx.Rollback()
 
-	err := DB.QueryRow(query, url.OriginalURL, url.ShortURL).Scan(&url.UUID)
+	stmt, err := tx.PrepareContext(ctx,
+		"INSERT INTO urls (originUrl, shortUrl)"+
+			" VALUES ($1, $2);")
+
+	if err != nil {
+		return url, err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx, url.OriginalURL, url.ShortURL)
 	if err != nil {
 		log.Printf("error inserting row: %v", err)
 		return url, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return url, nil
 	}
 
 	log.Printf("url %v saved in db", url)
 	return url, nil
 }
 
+func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error) {
+	var URLs []URL
+
+	tx, err := DB.Begin()
+	if err != nil {
+		log.Printf("error start transaction: %v", err)
+		return URLs, err
+	}
+
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx,
+		"INSERT INTO urls (originUrl, shortUrl) "+
+			"VALUES ($1, $2);")
+
+	if err != nil {
+		log.Printf("error preparing context: %v", err)
+		return URLs, err
+	}
+	defer stmt.Close()
+
+	for _, url := range batch {
+		urlObj := getURLObjectWithID(url.CorrelationID, url.OriginalURL)
+		_, err = stmt.ExecContext(ctx, urlObj.OriginalURL, urlObj.ShortURL)
+		if err != nil {
+			log.Printf("error inserting row: %v", err)
+			return URLs, err
+		}
+
+		URLs = append(URLs, urlObj)
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Printf("error commit transaction: %v", err)
+		return URLs, err
+	}
+
+	return URLs, nil
+}
+
 func createTableIfNotExists() error {
-	createTableSQL := `
-		CREATE TABLE IF NOT EXISTS urls (
-			id INTEGER PRIMARY KEY,
-			originUrl VARCHAR(250) NOT NULL,
-			shortUrl VARCHAR(250) NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);`
+	createTableSQL := "CREATE TABLE IF NOT EXISTS urls (" +
+		" id SERIAL PRIMARY KEY," +
+		" originUrl VARCHAR(250) NOT NULL," +
+		" shortUrl VARCHAR(250) NOT NULL," +
+		" created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)"
 
 	if _, err := DB.ExecContext(context.Background(), createTableSQL); err != nil {
 		log.Printf("error creating table: %v", err)

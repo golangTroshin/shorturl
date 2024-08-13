@@ -22,7 +22,7 @@ func PostRequestHandler(storage storage.Storage) http.HandlerFunc {
 			return
 		}
 
-		url, err := storage.Set(r.Context(), body)
+		url, err := storage.Set(r.Context(), string(body))
 		if err != nil {
 			log.Println(err)
 		}

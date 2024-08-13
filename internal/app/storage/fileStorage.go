@@ -41,17 +41,12 @@ func (store *FileStore) Get(ctx context.Context, key string) (string, error) {
 	return val.OriginalURL, nil
 }
 
-func (store *FileStore) Set(ctx context.Context, value []byte) (URL, error) {
+func (store *FileStore) Set(ctx context.Context, value string) (URL, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	key := generateShortUrl(value)
-	url := URL{
-		UUID:        len(store.urlList) + 1,
-		ShortURL:    key,
-		OriginalURL: string(value),
-	}
-	store.urlList[key] = url
+	url := getURLObject(value)
+	store.urlList[url.ShortURL] = url
 
 	Producer, err := NewProducer(config.Options.StoragePath)
 	if err != nil {
@@ -64,6 +59,32 @@ func (store *FileStore) Set(ctx context.Context, value []byte) (URL, error) {
 	}
 
 	return url, nil
+}
+
+func (store *FileStore) SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error) {
+	var URLs []URL
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	for _, url := range batch {
+		urlObj := getURLObjectWithID(url.CorrelationID, url.OriginalURL)
+		store.urlList[urlObj.ShortURL] = urlObj
+
+		Producer, err := NewProducer(config.Options.StoragePath)
+		if err != nil {
+			return URLs, err
+		}
+		defer Producer.Close()
+
+		if err := Producer.WriteURL(&urlObj); err != nil {
+			return URLs, err
+		}
+
+		URLs = append(URLs, urlObj)
+	}
+
+	return URLs, nil
 }
 
 func (store *FileStore) loadFromFile() error {

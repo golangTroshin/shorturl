@@ -11,13 +11,32 @@ import (
 
 type Storage interface {
 	Get(ctx context.Context, key string) (string, error)
-	Set(ctx context.Context, value []byte) (URL, error)
+	Set(ctx context.Context, value string) (URL, error)
+	SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error)
 }
 
 type URL struct {
-	UUID        int    `json:"uuid"`
+	UUID        string `json:"uuid"`
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
+}
+
+type RequestURL struct {
+	URL string `json:"url"`
+}
+
+type ResponseShortURL struct {
+	ShortURL string `json:"result"`
+}
+
+type RequestBodyBanch struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type ResponseBodyBanch struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
 }
 
 func GetStorageByConfig() (Storage, error) {
@@ -45,7 +64,25 @@ func GetStorageByConfig() (Storage, error) {
 	return NewMemoryStore(), nil
 }
 
-func generateShortUrl(body []byte) string {
-	hash := sha256.Sum256(body)
+func getURLObject(url string) URL {
+	key := generateShortURL(url)
+	return URL{
+		UUID:        "uuid_" + key,
+		ShortURL:    key,
+		OriginalURL: url,
+	}
+}
+
+func getURLObjectWithID(uuid string, url string) URL {
+	key := generateShortURL(url)
+	return URL{
+		UUID:        uuid,
+		ShortURL:    key,
+		OriginalURL: url,
+	}
+}
+
+func generateShortURL(body string) string {
+	hash := sha256.Sum256([]byte(body))
 	return base64.URLEncoding.EncodeToString(hash[:])[:8]
 }
