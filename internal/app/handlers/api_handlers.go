@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
@@ -20,13 +21,19 @@ func APIPostHandler(store storage.Storage) http.HandlerFunc {
 			return
 		}
 
+		status := http.StatusCreated
+
 		urlObj, err := store.Set(r.Context(), url.URL)
 		if err != nil {
-			log.Println(err)
+			var target *storage.InsertConflictError
+
+			if errors.As(err, &target) {
+				status = http.StatusConflict
+			}
 		}
 
 		w.Header().Set("Content-Type", ContentTypeJSON)
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(status)
 
 		var result storage.ResponseShortURL
 		result.ShortURL = config.Options.FlagBaseURL + "/" + urlObj.ShortURL

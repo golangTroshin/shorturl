@@ -3,7 +3,9 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
 )
@@ -11,6 +13,22 @@ import (
 type DatabaseStore struct{}
 
 var DB *sql.DB
+
+type InsertConflictError struct {
+	Time time.Time
+	Err  error
+}
+
+func (te *InsertConflictError) Error() string {
+	return fmt.Sprintf("%v %v", te.Time.Format("2006/01/02 15:04:05"), te.Err)
+}
+
+func NewInsertConflictError() error {
+	return &InsertConflictError{
+		Time: time.Now(),
+		Err:  fmt.Errorf("conflict: originUrl already exists"),
+	}
+}
 
 func initDB() error {
 	var err error
@@ -80,23 +98,38 @@ func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) 
 
 	defer tx.Rollback()
 
-	stmt, err := tx.PrepareContext(ctx,
-		"INSERT INTO urls (originUrl, shortUrl)"+
-			" VALUES ($1, $2);")
+	result, err := DB.ExecContext(ctx, `
+        INSERT INTO urls (originUrl, shortUrl)
+        VALUES ($1, $2)
+        ON CONFLICT (originUrl) DO NOTHING`, url.OriginalURL, url.ShortURL)
 
 	if err != nil {
 		return url, err
 	}
-	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, url.OriginalURL, url.ShortURL)
+	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		log.Printf("error inserting row: %v", err)
 		return url, err
+	}
+
+	if rowsAffected == 0 {
+		var existingShortURL string
+
+		queryErr := DB.QueryRowContext(ctx, `
+            SELECT shortUrl FROM urls WHERE originUrl = $1`, url.OriginalURL).Scan(&existingShortURL)
+
+		if queryErr != nil {
+			return url, queryErr
+		}
+
+		url.ShortURL = existingShortURL
+		log.Printf("conflict: originUrl %v already exists", url.OriginalURL)
+
+		return url, NewInsertConflictError()
 	}
 
 	if err = tx.Commit(); err != nil {
-		return url, nil
+		return url, err
 	}
 
 	log.Printf("url %v saved in db", url)
@@ -146,7 +179,7 @@ func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBan
 func createTableIfNotExists() error {
 	createTableSQL := "CREATE TABLE IF NOT EXISTS urls (" +
 		" id SERIAL PRIMARY KEY," +
-		" originUrl VARCHAR(250) NOT NULL," +
+		" originUrl VARCHAR(250) NOT NULL UNIQUE," +
 		" shortUrl VARCHAR(250) NOT NULL," +
 		" created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)"
 

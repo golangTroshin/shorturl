@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 
 const ContentTypePlainText = "text/plain"
 
-func PostRequestHandler(storage storage.Storage) http.HandlerFunc {
+func PostRequestHandler(store storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -22,13 +23,19 @@ func PostRequestHandler(storage storage.Storage) http.HandlerFunc {
 			return
 		}
 
-		url, err := storage.Set(r.Context(), string(body))
+		status := http.StatusCreated
+
+		url, err := store.Set(r.Context(), string(body))
 		if err != nil {
-			log.Println(err)
+			var target *storage.InsertConflictError
+
+			if errors.As(err, &target) {
+				status = http.StatusConflict
+			}
 		}
 
 		w.Header().Set("Content-Type", ContentTypePlainText)
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(status)
 
 		_, err = w.Write([]byte(config.Options.FlagBaseURL + "/" + url.ShortURL))
 		if err != nil {
