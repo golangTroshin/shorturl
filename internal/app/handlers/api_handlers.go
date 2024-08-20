@@ -66,9 +66,13 @@ func APIPostBatchHandler(store storage.Storage) http.HandlerFunc {
 		w.Header().Set("Content-Type", ContentTypeJSON)
 		w.WriteHeader(http.StatusCreated)
 
-		var responseBodies []storage.ResponseBodyBanch
+		type responseBodyBanch struct {
+			CorrelationID string `json:"correlation_id"`
+			ShortURL      string `json:"short_url"`
+		}
+		var responseBodies []responseBodyBanch
 		for _, url := range urlObjs {
-			responseBody := storage.ResponseBodyBanch{
+			responseBody := responseBodyBanch{
 				CorrelationID: url.UUID,
 				ShortURL:      config.Options.FlagBaseURL + "/" + url.ShortURL,
 			}

@@ -117,3 +117,10 @@ func isContentTypeAllowed(contentType string) bool {
 
 	return ok
 }
+
+func ChainMiddlewares(handler http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
+	for _, middleware := range middlewares {
+		handler = middleware(handler)
+	}
+	return handler
+}

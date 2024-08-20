@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/golangTroshin/shorturl/internal/app/config"
+	"github.com/golangTroshin/shorturl/internal/app/middleware"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -64,6 +66,51 @@ func GetRequestHandler(storage storage.Storage) http.HandlerFunc {
 		w.Header().Set("Content-Type", ContentTypePlainText)
 		w.Header().Set("Location", val)
 		w.WriteHeader(http.StatusTemporaryRedirect)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func GetURLsByUserHandler(store storage.Storage) http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		authToken, err := r.Cookie(middleware.CookieAuthToken)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if authToken.Value == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		urls, err := store.GetByUserID(r.Context(), authToken.Value)
+		if err != nil || len(urls) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		type responseGetByUserID struct {
+			ShortURL    string `json:"short_url"`
+			OriginalURL string `json:"original_url"`
+		}
+		w.Header().Set("Content-Type", ContentTypeJSON)
+		var responseBodies []responseGetByUserID
+		for _, url := range urls {
+			responseBody := responseGetByUserID{
+				ShortURL:    config.Options.FlagBaseURL + "/" + url.ShortURL,
+				OriginalURL: url.OriginalURL,
+			}
+			responseBodies = append(responseBodies, responseBody)
+		}
+
+		log.Printf("responseBodies %v", responseBodies)
+
+		if err := json.NewEncoder(w).Encode(&responseBodies); err != nil {
+			log.Printf("Unable to write reponse: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	return http.HandlerFunc(fn)
