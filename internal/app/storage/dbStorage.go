@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
+	"github.com/golangTroshin/shorturl/internal/app/middleware"
 )
 
 type DatabaseStore struct{}
@@ -70,7 +71,7 @@ func NewDatabaseStore() (*DatabaseStore, error) {
 }
 
 func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error) {
-	query := `SELECT originUrl FROM urls WHERE shortUrl = $1;`
+	query := `SELECT origin_url FROM urls WHERE short_url = $1;`
 
 	var originalURL string
 	err := DB.QueryRowContext(ctx, query, key).Scan(&originalURL)
@@ -88,27 +89,66 @@ func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error)
 	return originalURL, nil
 }
 
+func (store *DatabaseStore) GetByUserID(ctx context.Context, userID string) ([]URL, error) {
+	var URLs []URL
+
+	query := `SELECT origin_url, short_url FROM urls WHERE user_id = $1;`
+
+	rows, err := DB.QueryContext(ctx, query, userID)
+
+	if rows.Err() != nil || err != nil {
+		log.Printf("error executing query: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var url URL
+		err := rows.Scan(&url.OriginalURL, &url.ShortURL)
+		if err != nil {
+			log.Printf("error scanning row: %v", err)
+			return nil, err
+		}
+		URLs = append(URLs, url)
+	}
+
+	return URLs, nil
+}
+
 func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) {
-	url := getURLObject(value)
+	ctxValue := ctx.Value(middleware.UserIDKey)
+	if ctxValue == nil {
+		return URL{}, fmt.Errorf("ctxValue is nil: %v", ctxValue)
+	}
+
+	userID := ctxValue.(string)
+	log.Printf("userID: %v", userID)
+	url := getURLObject(value, userID)
 
 	tx, err := DB.Begin()
 	if err != nil {
+		log.Printf("error %v", err)
+
 		return url, err
 	}
 
 	defer tx.Rollback()
 
 	result, err := DB.ExecContext(ctx, `
-        INSERT INTO urls (originUrl, shortUrl)
-        VALUES ($1, $2)
-        ON CONFLICT (originUrl) DO NOTHING`, url.OriginalURL, url.ShortURL)
+        INSERT INTO urls (origin_url, short_url, user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (origin_url) DO NOTHING`, url.OriginalURL, url.ShortURL, userID)
 
 	if err != nil {
+		log.Printf("error %v", err)
+
 		return url, err
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
+		log.Printf("error %v", err)
+
 		return url, err
 	}
 
@@ -116,9 +156,11 @@ func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) 
 		var existingShortURL string
 
 		queryErr := DB.QueryRowContext(ctx, `
-            SELECT shortUrl FROM urls WHERE originUrl = $1`, url.OriginalURL).Scan(&existingShortURL)
+            SELECT short_url FROM urls WHERE origin_url = $1`, url.OriginalURL).Scan(&existingShortURL)
 
 		if queryErr != nil {
+			log.Printf("error %v", err)
+
 			return url, queryErr
 		}
 
@@ -129,6 +171,8 @@ func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) 
 	}
 
 	if err = tx.Commit(); err != nil {
+		log.Printf("error %v", err)
+
 		return url, err
 	}
 
@@ -148,8 +192,8 @@ func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBan
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx,
-		"INSERT INTO urls (originUrl, shortUrl) "+
-			"VALUES ($1, $2);")
+		"INSERT INTO urls (origin_url, short_url, user_id) "+
+			"VALUES ($1, $2, $3);")
 
 	if err != nil {
 		log.Printf("error preparing context: %v", err)
@@ -157,9 +201,10 @@ func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBan
 	}
 	defer stmt.Close()
 
+	userID := ctx.Value(middleware.UserIDKey).(string)
 	for _, url := range batch {
-		urlObj := getURLObjectWithID(url.CorrelationID, url.OriginalURL)
-		_, err = stmt.ExecContext(ctx, urlObj.OriginalURL, urlObj.ShortURL)
+		urlObj := getURLObjectWithID(url.CorrelationID, url.OriginalURL, userID)
+		_, err = stmt.ExecContext(ctx, urlObj.OriginalURL, urlObj.ShortURL, userID)
 		if err != nil {
 			log.Printf("error inserting row: %v", err)
 			return URLs, err
@@ -179,8 +224,9 @@ func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBan
 func createTableIfNotExists() error {
 	createTableSQL := "CREATE TABLE IF NOT EXISTS urls (" +
 		" id SERIAL PRIMARY KEY," +
-		" originUrl VARCHAR(250) NOT NULL UNIQUE," +
-		" shortUrl VARCHAR(250) NOT NULL," +
+		" origin_url VARCHAR(250) NOT NULL UNIQUE," +
+		" short_url VARCHAR(250) NOT NULL," +
+		" user_id VARCHAR(250) NOT NULL," +
 		" created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)"
 
 	if _, err := DB.ExecContext(context.Background(), createTableSQL); err != nil {

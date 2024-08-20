@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"sync"
+
+	"github.com/golangTroshin/shorturl/internal/app/middleware"
 )
 
 type MemoryStore struct {
@@ -29,13 +31,24 @@ func (store *MemoryStore) Get(ctx context.Context, key string) (string, error) {
 	return val.OriginalURL, nil
 }
 
+func (store *MemoryStore) GetByUserID(ctx context.Context, userID string) ([]URL, error) {
+	var URLs []URL
+
+	return URLs, nil
+}
+
 func (store *MemoryStore) Set(ctx context.Context, value string) (URL, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	url := getURLObject(value)
-	store.urlList[url.ShortURL] = url
+	ctxValue := ctx.Value(middleware.UserIDKey)
+	userID := "default"
+	if ctxValue != nil {
+		userID = ctxValue.(string)
+	}
 
+	url := getURLObject(value, userID)
+	store.urlList[url.ShortURL] = url
 	return url, nil
 }
 
@@ -44,8 +57,9 @@ func (store *MemoryStore) SetBatch(ctx context.Context, urls []RequestBodyBanch)
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
+	userID := ctx.Value(middleware.UserIDKey).(string)
 	for _, url := range urls {
-		url := getURLObjectWithID(url.CorrelationID, url.OriginalURL)
+		url := getURLObjectWithID(url.CorrelationID, url.OriginalURL, userID)
 		store.urlList[url.ShortURL] = url
 		URLs = append(URLs, url)
 	}

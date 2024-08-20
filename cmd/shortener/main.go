@@ -32,11 +32,26 @@ func main() {
 func Router(store storage.Storage) chi.Router {
 	r := chi.NewRouter()
 
-	r.Post("/", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.PostRequestHandler(store))))
-	r.Post("/api/shorten", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.APIPostHandler(store))))
-	r.Post("/api/shorten/batch", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.APIPostBatchHandler(store))))
+	r.Post("/", middleware.ChainMiddlewares(handlers.PostRequestHandler(store),
+		middleware.GiveAuthTokenToUser,
+		middleware.GzipMiddleware,
+		logger.LoggingWrapper,
+	))
+
+	r.Post("/api/shorten", middleware.ChainMiddlewares(handlers.APIPostHandler(store),
+		middleware.GiveAuthTokenToUser,
+		middleware.GzipMiddleware,
+		logger.LoggingWrapper,
+	))
+
+	r.Post("/api/shorten/batch", middleware.ChainMiddlewares(handlers.APIPostBatchHandler(store),
+		middleware.GiveAuthTokenToUser,
+		middleware.GzipMiddleware,
+		logger.LoggingWrapper,
+	))
 
 	r.Get("/{id}", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetRequestHandler(store))))
+	r.Get("/api/user/urls", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetURLsByUserHandler(store))))
 	r.Get("/ping", logger.LoggingWrapper(handlers.DatabasePing()))
 
 	return r

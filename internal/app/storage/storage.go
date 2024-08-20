@@ -11,6 +11,7 @@ import (
 
 type Storage interface {
 	Get(ctx context.Context, key string) (string, error)
+	GetByUserID(ctx context.Context, userID string) ([]URL, error)
 	Set(ctx context.Context, value string) (URL, error)
 	SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error)
 }
@@ -19,6 +20,7 @@ type URL struct {
 	UUID        string `json:"uuid"`
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
+	UserID      string
 }
 
 type RequestURL struct {
@@ -32,11 +34,6 @@ type ResponseShortURL struct {
 type RequestBodyBanch struct {
 	CorrelationID string `json:"correlation_id"`
 	OriginalURL   string `json:"original_url"`
-}
-
-type ResponseBodyBanch struct {
-	CorrelationID string `json:"correlation_id"`
-	ShortURL      string `json:"short_url"`
 }
 
 func GetStorageByConfig() (Storage, error) {
@@ -64,21 +61,24 @@ func GetStorageByConfig() (Storage, error) {
 	return NewMemoryStore(), nil
 }
 
-func getURLObject(url string) URL {
+func getURLObject(url string, userID string) URL {
 	key := generateShortURL(url)
 	return URL{
 		UUID:        "uuid_" + key,
 		ShortURL:    key,
 		OriginalURL: url,
+		UserID:      userID,
 	}
 }
 
-func getURLObjectWithID(uuid string, url string) URL {
+func getURLObjectWithID(uuid string, url string, userID string) URL {
 	key := generateShortURL(url)
+
 	return URL{
 		UUID:        uuid,
 		ShortURL:    key,
 		OriginalURL: url,
+		UserID:      userID,
 	}
 }
 
