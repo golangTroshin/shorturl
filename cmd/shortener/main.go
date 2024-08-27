@@ -24,6 +24,8 @@ func main() {
 
 	defer storage.CloseDB()
 
+	go handlers.StartDeleteWorker(store)
+
 	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
@@ -53,6 +55,11 @@ func Router(store storage.Storage) chi.Router {
 	r.Get("/{id}", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetRequestHandler(store))))
 	r.Get("/api/user/urls", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetURLsByUserHandler(store))))
 	r.Get("/ping", logger.LoggingWrapper(handlers.DatabasePing()))
+
+	r.Delete("/api/user/urls", middleware.ChainMiddlewares(handlers.APIDeleteUrlsHandler(store),
+		middleware.GzipMiddleware,
+		logger.LoggingWrapper,
+	))
 
 	return r
 }

@@ -49,7 +49,7 @@ func PostRequestHandler(store storage.Storage) http.HandlerFunc {
 	return http.HandlerFunc(fn)
 }
 
-func GetRequestHandler(storage storage.Storage) http.HandlerFunc {
+func GetRequestHandler(store storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -57,15 +57,24 @@ func GetRequestHandler(storage storage.Storage) http.HandlerFunc {
 			return
 		}
 
-		val, err := storage.Get(r.Context(), id)
+		status := http.StatusTemporaryRedirect
+
+		val, err := store.Get(r.Context(), id)
 		if err != nil {
-			http.Error(w, "No info about requested route", http.StatusNotFound)
-			return
+			var target *storage.DeletedURLError
+
+			if errors.As(err, &target) {
+				status = http.StatusGone
+			} else {
+				http.Error(w, "No info about requested route", http.StatusNotFound)
+				return
+			}
+		} else {
+			w.Header().Set("Content-Type", ContentTypePlainText)
+			w.Header().Set("Location", val)
 		}
 
-		w.Header().Set("Content-Type", ContentTypePlainText)
-		w.Header().Set("Location", val)
-		w.WriteHeader(http.StatusTemporaryRedirect)
+		w.WriteHeader(status)
 	}
 
 	return http.HandlerFunc(fn)
@@ -124,13 +133,13 @@ func DatabasePing() http.HandlerFunc {
 			http.Error(w, "Unable to connect to database", http.StatusInternalServerError)
 		}
 
+		defer db.Close()
+
 		err = db.Ping()
 		if err != nil {
 			log.Printf("Unable to write reponse: %v", err)
 			http.Error(w, "Unable to reach database", http.StatusInternalServerError)
 		}
-
-		defer db.Close()
 	}
 
 	return http.HandlerFunc(fn)

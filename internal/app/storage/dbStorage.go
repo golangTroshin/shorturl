@@ -9,6 +9,7 @@ import (
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
 	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/lib/pq"
 )
 
 type DatabaseStore struct{}
@@ -28,6 +29,22 @@ func NewInsertConflictError() error {
 	return &InsertConflictError{
 		Time: time.Now(),
 		Err:  fmt.Errorf("conflict: originUrl already exists"),
+	}
+}
+
+type DeletedURLError struct {
+	Time time.Time
+	Err  error
+}
+
+func (te *DeletedURLError) Error() string {
+	return fmt.Sprintf("%v %v", te.Time.Format("2006/01/02 15:04:05"), te.Err)
+}
+
+func NewDeletedURLError() error {
+	return &DeletedURLError{
+		Time: time.Now(),
+		Err:  fmt.Errorf("url was deleted"),
 	}
 }
 
@@ -71,10 +88,11 @@ func NewDatabaseStore() (*DatabaseStore, error) {
 }
 
 func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error) {
-	query := `SELECT origin_url FROM urls WHERE short_url = $1;`
+	query := `SELECT origin_url, is_deleted FROM urls WHERE short_url = $1;`
 
 	var originalURL string
-	err := DB.QueryRowContext(ctx, query, key).Scan(&originalURL)
+	var isDeleted bool
+	err := DB.QueryRowContext(ctx, query, key).Scan(&originalURL, &isDeleted)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("there is no rows: %v", err)
@@ -85,7 +103,12 @@ func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error)
 		return "", err
 	}
 
-	log.Printf("url is found: %v", originalURL)
+	log.Printf("url is found: %v %v", originalURL, isDeleted)
+	if isDeleted {
+		log.Printf("url was deleted: %v", originalURL)
+		return "", NewDeletedURLError()
+	}
+
 	return originalURL, nil
 }
 
@@ -125,15 +148,6 @@ func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) 
 	log.Printf("userID: %v", userID)
 	url := getURLObject(value, userID)
 
-	tx, err := DB.Begin()
-	if err != nil {
-		log.Printf("error %v", err)
-
-		return url, err
-	}
-
-	defer tx.Rollback()
-
 	result, err := DB.ExecContext(ctx, `
         INSERT INTO urls (origin_url, short_url, user_id)
         VALUES ($1, $2, $3)
@@ -168,12 +182,6 @@ func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) 
 		log.Printf("conflict: originUrl %v already exists", url.OriginalURL)
 
 		return url, NewInsertConflictError()
-	}
-
-	if err = tx.Commit(); err != nil {
-		log.Printf("error %v", err)
-
-		return url, err
 	}
 
 	log.Printf("url %v saved in db", url)
@@ -221,12 +229,35 @@ func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBan
 	return URLs, nil
 }
 
+func (store *DatabaseStore) BatchDeleteURLs(userID string, urlIDs []string) error {
+	log.Printf("Start delete: %v %v", urlIDs, userID)
+	query := `UPDATE urls SET is_deleted = TRUE WHERE short_url = ANY($1) AND user_id = $2`
+
+	result, err := DB.Exec(query, pq.Array(urlIDs), userID)
+
+	if err != nil {
+		log.Printf("Error deleting URLs: %v", err)
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("Error fetching rows affected: %v", err)
+		return err
+	}
+
+	log.Printf("Rows affected: %d", rowsAffected)
+
+	return nil
+}
+
 func createTableIfNotExists() error {
 	createTableSQL := "CREATE TABLE IF NOT EXISTS urls (" +
 		" id SERIAL PRIMARY KEY," +
 		" origin_url VARCHAR(250) NOT NULL UNIQUE," +
 		" short_url VARCHAR(250) NOT NULL," +
 		" user_id VARCHAR(250) NOT NULL," +
+		" is_deleted BOOL NOT NULL DEFAULT FALSE," +
 		" created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)"
 
 	if _, err := DB.ExecContext(context.Background(), createTableSQL); err != nil {

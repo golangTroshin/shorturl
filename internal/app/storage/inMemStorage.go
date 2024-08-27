@@ -66,3 +66,7 @@ func (store *MemoryStore) SetBatch(ctx context.Context, urls []RequestBodyBanch)
 
 	return URLs, nil
 }
+
+func (store *MemoryStore) BatchDeleteURLs(userID string, batch []string) error {
+	return nil
+}

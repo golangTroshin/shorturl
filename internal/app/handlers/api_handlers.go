@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
+	"github.com/golangTroshin/shorturl/internal/app/middleware"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 )
 
@@ -89,4 +90,52 @@ func APIPostBatchHandler(store storage.Storage) http.HandlerFunc {
 	}
 
 	return http.HandlerFunc(fn)
+}
+
+func APIDeleteUrlsHandler(store storage.Storage) http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		var urlIDs []string
+		err := json.NewDecoder(r.Body).Decode(&urlIDs)
+		if err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		authToken, err := r.Cookie(middleware.CookieAuthToken)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if authToken.Value == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		userID := authToken.Value
+		log.Printf("urls: %v, user: %v", urlIDs, userID)
+
+		deleteChan <- deleteRequest{URLIDs: urlIDs, UserID: userID}
+
+		w.WriteHeader(http.StatusAccepted)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+type deleteRequest struct {
+	URLIDs []string
+	UserID string
+}
+
+var deleteChan = make(chan deleteRequest, 100)
+
+func StartDeleteWorker(store storage.Storage) {
+	for req := range deleteChan {
+		err := store.BatchDeleteURLs(req.UserID, req.URLIDs)
+
+		if err != nil {
+			log.Printf("Error deleting URLs for user %v: %v", req.UserID, err)
+		}
+	}
 }

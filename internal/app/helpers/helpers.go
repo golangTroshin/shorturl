@@ -53,7 +53,7 @@ func GetUserIDByToken(tokenString string) string {
 		return ""
 	}
 
-	fmt.Println("Token is valid")
+	log.Println("Token is valid")
 	return claims.UserID
 }
 

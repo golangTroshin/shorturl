@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -29,7 +28,7 @@ func (r *loggingResponseWriter) Write(b []byte) (int, error) {
 
 func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 	r.ResponseWriter.WriteHeader(statusCode)
-	fmt.Println("status", statusCode)
+	log.Println("status", statusCode)
 	r.responseData.status = statusCode
 }
 

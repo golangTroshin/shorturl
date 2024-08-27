@@ -10,7 +10,7 @@ import (
 
 type ContextKey string
 
-const CookieAuthToken = "auth_tocken"
+const CookieAuthToken = "auth_token"
 
 const UserIDKey = ContextKey("userID")
 

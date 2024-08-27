@@ -96,6 +96,10 @@ func (store *FileStore) SetBatch(ctx context.Context, batch []RequestBodyBanch) 
 	return URLs, nil
 }
 
+func (store *FileStore) BatchDeleteURLs(userID string, batch []string) error {
+	return nil
+}
+
 func (store *FileStore) loadFromFile() error {
 	consumer, err := NewConsumer(config.Options.StoragePath)
 	if err != nil {
