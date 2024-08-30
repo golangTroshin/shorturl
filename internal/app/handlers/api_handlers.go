@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
@@ -11,42 +12,72 @@ import (
 
 const ContentTypeJSON = "application/json"
 
-type RequestURL struct {
-	URL string `json:"url"`
-}
-
-type ResponseShortURL struct {
-	ShortURL string `json:"result"`
-}
-
-func APIPostHandler(store *storage.URLStore) http.HandlerFunc {
+func APIPostHandler(store storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		var url RequestURL
+		var url storage.RequestURL
 
 		if err := json.NewDecoder(r.Body).Decode(&url); err != nil {
 			http.Error(w, "Wrong request body", http.StatusBadRequest)
 			return
 		}
 
-		urlObj := store.Set([]byte(url.URL))
+		status := http.StatusCreated
 
-		Producer, err := storage.NewProducer(config.Options.StoragePath)
+		urlObj, err := store.Set(r.Context(), url.URL)
 		if err != nil {
-			log.Println(err)
-		}
-		defer Producer.Close()
+			var target *storage.InsertConflictError
 
-		if err := Producer.WriteURL(&urlObj); err != nil {
+			if errors.As(err, &target) {
+				status = http.StatusConflict
+			}
+		}
+
+		w.Header().Set("Content-Type", ContentTypeJSON)
+		w.WriteHeader(status)
+
+		var result storage.ResponseShortURL
+		result.ShortURL = config.Options.FlagBaseURL + "/" + urlObj.ShortURL
+
+		if err := json.NewEncoder(w).Encode(&result); err != nil {
+			log.Printf("Unable to write reponse: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func APIPostBatchHandler(store storage.Storage) http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		var requestBodies []storage.RequestBodyBanch
+		err := json.NewDecoder(r.Body).Decode(&requestBodies)
+		if err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		urlObjs, err := store.SetBatch(r.Context(), requestBodies)
+		log.Printf("urlObjs %v", urlObjs)
+		if err != nil {
 			log.Println(err)
 		}
 
 		w.Header().Set("Content-Type", ContentTypeJSON)
 		w.WriteHeader(http.StatusCreated)
 
-		var result ResponseShortURL
-		result.ShortURL = config.Options.FlagBaseURL + "/" + urlObj.ShortURL
+		var responseBodies []storage.ResponseBodyBanch
+		for _, url := range urlObjs {
+			responseBody := storage.ResponseBodyBanch{
+				CorrelationID: url.UUID,
+				ShortURL:      config.Options.FlagBaseURL + "/" + url.ShortURL,
+			}
+			responseBodies = append(responseBodies, responseBody)
+		}
 
-		if err := json.NewEncoder(w).Encode(&result); err != nil {
+		log.Printf("responseBodies %v", responseBodies)
+
+		if err := json.NewEncoder(w).Encode(&responseBodies); err != nil {
 			log.Printf("Unable to write reponse: %v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

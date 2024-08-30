@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -28,6 +29,7 @@ func (r *loggingResponseWriter) Write(b []byte) (int, error) {
 
 func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 	r.ResponseWriter.WriteHeader(statusCode)
+	fmt.Println("status", statusCode)
 	r.responseData.status = statusCode
 }
 
@@ -55,12 +57,16 @@ func LoggingWrapper(h http.HandlerFunc) http.HandlerFunc {
 		sugar.Infoln(
 			"uri", r.RequestURI,
 			"method", r.Method,
-			"status", responseData.status,
 			"duration", time.Since(start),
-			"size", responseData.size,
 		)
 
 		h.ServeHTTP(&lw, r)
+
+		sugar.Infoln(
+			"status", responseData.status,
+			"size", responseData.size,
+			"duration", time.Since(start),
+		)
 	}
 
 	return http.HandlerFunc(logFn)

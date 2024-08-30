@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/handlers"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 	"github.com/stretchr/testify/require"
 )
@@ -50,10 +50,7 @@ func TestPostRequestHandler(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		store, err := storage.InitURLStore()
-		if err != nil {
-			t.Fatalf("failed to init storage: %v", err)
-		}
+		store := storage.NewMemoryStore()
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
@@ -96,7 +93,7 @@ func TestAPIPostHandler(t *testing.T) {
 		contentType string
 		content     string
 	}
-	var request handlers.RequestURL
+	var request storage.RequestURL
 	request.URL = "https://practicum.yandex.ru/"
 
 	body, err := json.Marshal(request)
@@ -134,13 +131,10 @@ func TestAPIPostHandler(t *testing.T) {
 		t.Fatalf("error ocured while parsing flags: %v", err)
 	}
 
-	var responseShortURL handlers.ResponseShortURL
+	var responseShortURL storage.ResponseShortURL
 
 	for _, tt := range tests {
-		store, err := storage.InitURLStore()
-		if err != nil {
-			t.Fatalf("failed to init storage: %v", err)
-		}
+		store := storage.NewMemoryStore()
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodPost, "/api/shorten", strings.NewReader(tt.body))
@@ -227,11 +221,8 @@ func TestGetRequestHandler(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		store, err := storage.InitURLStore()
-		if err != nil {
-			t.Fatalf("failed to init storage: %v", err)
-		}
-		store.Set([]byte("https://practicum.yandex.ru/"))
+		store := storage.NewMemoryStore()
+		store.Set(context.Background(), "https://practicum.yandex.ru/")
 		router := Router(store)
 
 		r := httptest.NewRequest(http.MethodGet, tt.requestURI, nil)
@@ -253,7 +244,7 @@ func TestGetRequestHandler(t *testing.T) {
 			t.Errorf("[%s] locations are not equal: expected: %s, result: %s ", tt.name, tt.want.location, result.Header.Get("Location"))
 		}
 
-		err = result.Body.Close()
+		err := result.Body.Close()
 		require.NoError(t, err)
 	}
 }

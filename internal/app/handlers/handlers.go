@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -8,11 +10,12 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/golangTroshin/shorturl/internal/app/config"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const ContentTypePlainText = "text/plain"
 
-func PostRequestHandler(store *storage.URLStore) http.HandlerFunc {
+func PostRequestHandler(store storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -20,24 +23,23 @@ func PostRequestHandler(store *storage.URLStore) http.HandlerFunc {
 			return
 		}
 
-		url := store.Set(body)
+		status := http.StatusCreated
 
-		Producer, err := storage.NewProducer(config.Options.StoragePath)
+		url, err := store.Set(r.Context(), string(body))
 		if err != nil {
-			log.Println(err)
-		}
-		defer Producer.Close()
+			var target *storage.InsertConflictError
 
-		if err := Producer.WriteURL(&url); err != nil {
-			log.Println(err)
+			if errors.As(err, &target) {
+				status = http.StatusConflict
+			}
 		}
 
 		w.Header().Set("Content-Type", ContentTypePlainText)
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(status)
 
 		_, err = w.Write([]byte(config.Options.FlagBaseURL + "/" + url.ShortURL))
 		if err != nil {
-			log.Panicf("Unable to write reponse: %v", err)
+			log.Printf("Unable to write reponse: %v", err)
 			http.Error(w, "Unable to write reponse", http.StatusNotFound)
 		}
 	}
@@ -45,7 +47,7 @@ func PostRequestHandler(store *storage.URLStore) http.HandlerFunc {
 	return http.HandlerFunc(fn)
 }
 
-func GetRequestHandler(store *storage.URLStore) http.HandlerFunc {
+func GetRequestHandler(storage storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -53,8 +55,8 @@ func GetRequestHandler(store *storage.URLStore) http.HandlerFunc {
 			return
 		}
 
-		val, ok := store.Get(id)
-		if !ok {
+		val, err := storage.Get(r.Context(), id)
+		if err != nil {
 			http.Error(w, "No info about requested route", http.StatusNotFound)
 			return
 		}
@@ -62,6 +64,26 @@ func GetRequestHandler(store *storage.URLStore) http.HandlerFunc {
 		w.Header().Set("Content-Type", ContentTypePlainText)
 		w.Header().Set("Location", val)
 		w.WriteHeader(http.StatusTemporaryRedirect)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func DatabasePing() http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		db, err := sql.Open("pgx", config.Options.DatabaseDsn)
+
+		if err != nil {
+			http.Error(w, "Unable to connect to database", http.StatusInternalServerError)
+		}
+
+		err = db.Ping()
+		if err != nil {
+			log.Printf("Unable to write reponse: %v", err)
+			http.Error(w, "Unable to reach database", http.StatusInternalServerError)
+		}
+
+		defer db.Close()
 	}
 
 	return http.HandlerFunc(fn)

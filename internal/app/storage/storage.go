@@ -1,161 +1,88 @@
 package storage
 
 import (
-	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
-	"os"
-	"sync"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+type Storage interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, value string) (URL, error)
+	SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error)
+}
+
 type URL struct {
-	UUID        int    `json:"uuid"`
+	UUID        string `json:"uuid"`
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 }
 
-type URLStore struct {
-	mu      sync.RWMutex
-	urlList map[string]URL
+type RequestURL struct {
+	URL string `json:"url"`
 }
 
-type Producer struct {
-	file *os.File
-	// добавляем Writer в Producer
-	writer *bufio.Writer
+type ResponseShortURL struct {
+	ShortURL string `json:"result"`
 }
 
-func NewProducer(filePath string) (*Producer, error) {
-	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Producer{
-		file:   file,
-		writer: bufio.NewWriter(file),
-	}, nil
+type RequestBodyBanch struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
 }
 
-func (p *Producer) Close() error {
-	return p.file.Close()
+type ResponseBodyBanch struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
 }
 
-func (p *Producer) WriteURL(url *URL) error {
-	data, err := json.Marshal(&url)
-	if err != nil {
-		return err
-	}
+func GetStorageByConfig() (Storage, error) {
+	var store Storage
+	var err error
 
-	if _, err := p.writer.Write(data); err != nil {
-		return err
-	}
-
-	if err := p.writer.WriteByte('\n'); err != nil {
-		return err
-	}
-
-	return p.writer.Flush()
-}
-
-type Consumer struct {
-	file   *os.File
-	reader *bufio.Reader
-}
-
-func NewConsumer(filename string) (*Consumer, error) {
-	file, err := os.OpenFile(filename, os.O_RDONLY|os.O_CREATE, 0777)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Consumer{
-		file:   file,
-		reader: bufio.NewReader(file),
-	}, nil
-}
-
-func (c *Consumer) Close() error {
-	return c.file.Close()
-}
-
-func (c *Consumer) ReadURL() (*URL, error) {
-	data, err := c.reader.ReadBytes('\n')
-	if err != nil {
-		return nil, err
-	}
-
-	url := URL{}
-	err = json.Unmarshal(data, &url)
-	if err != nil {
-		return nil, err
-	}
-
-	return &url, nil
-}
-
-func InitURLStore() (*URLStore, error) {
-	store := &URLStore{
-		urlList: make(map[string]URL),
-	}
-
-	err := store.loadFromFile()
-	if err != nil {
-		return nil, err
-	}
-
-	return store, nil
-}
-
-func (store *URLStore) Set(value []byte) URL {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	key := generateKey(value)
-	url := URL{
-		UUID:        len(store.urlList) + 1,
-		ShortURL:    key,
-		OriginalURL: string(value),
-	}
-	store.urlList[key] = url
-
-	return url
-}
-
-func (store *URLStore) Get(key string) (string, bool) {
-	store.mu.RLock()
-	defer store.mu.RUnlock()
-	val, ok := store.urlList[key]
-	return val.OriginalURL, ok
-}
-
-func (store *URLStore) loadFromFile() error {
-	consumer, err := NewConsumer(config.Options.StoragePath)
-	if err != nil {
-		return err
-	}
-	defer consumer.Close()
-
-	for {
-		url, err := consumer.ReadURL()
+	if config.Options.DatabaseDsn != "" {
+		store, err = NewDatabaseStore()
 		if err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			return err
+			return store, err
 		}
 
-		if _, ok := store.urlList[url.ShortURL]; !ok {
-			store.urlList[url.ShortURL] = *url
-		}
+		return store, nil
 	}
-	return nil
+
+	if config.Options.StoragePath != "" {
+		store, err = NewFileStore()
+		if err != nil {
+			return store, err
+		}
+
+		return store, nil
+	}
+
+	return NewMemoryStore(), nil
 }
 
-func generateKey(body []byte) string {
-	hash := sha256.Sum256(body)
+func getURLObject(url string) URL {
+	key := generateShortURL(url)
+	return URL{
+		UUID:        "uuid_" + key,
+		ShortURL:    key,
+		OriginalURL: url,
+	}
+}
+
+func getURLObjectWithID(uuid string, url string) URL {
+	key := generateShortURL(url)
+	return URL{
+		UUID:        uuid,
+		ShortURL:    key,
+		OriginalURL: url,
+	}
+}
+
+func generateShortURL(body string) string {
+	hash := sha256.Sum256([]byte(body))
 	return base64.URLEncoding.EncodeToString(hash[:])[:8]
 }
