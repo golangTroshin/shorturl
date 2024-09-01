@@ -14,8 +14,8 @@ const CookieAuthToken = "auth_token"
 
 const UserIDKey = ContextKey("userID")
 
-func GiveAuthTokenToUser(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func GiveAuthTokenToUser(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var ctx context.Context
 		authToken, err := r.Cookie(CookieAuthToken)
 		if err != nil {
@@ -26,7 +26,6 @@ func GiveAuthTokenToUser(h http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 			http.SetCookie(w, &http.Cookie{Name: CookieAuthToken, Value: token})
-			r.Header.Set("Authorization", token)
 			ctx = context.WithValue(r.Context(), UserIDKey, token)
 			log.Println("cookie is set")
 		} else if authToken.Value != "" {
@@ -36,5 +35,24 @@ func GiveAuthTokenToUser(h http.HandlerFunc) http.HandlerFunc {
 
 		log.Println("end GiveAuthTokenToUser")
 		h.ServeHTTP(w, r.WithContext(ctx))
-	}
+	})
+}
+
+func CheckAuthToken(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var ctx context.Context
+		authToken, err := r.Cookie(CookieAuthToken)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if authToken.Value == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		ctx = context.WithValue(r.Context(), UserIDKey, authToken.Value)
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

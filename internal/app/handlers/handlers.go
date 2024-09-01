@@ -82,18 +82,8 @@ func GetRequestHandler(store storage.Storage) http.HandlerFunc {
 
 func GetURLsByUserHandler(store storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		authToken, err := r.Cookie(middleware.CookieAuthToken)
-		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		if authToken.Value == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		urls, err := store.GetByUserID(r.Context(), authToken.Value)
+		userID := r.Context().Value(middleware.UserIDKey).(string)
+		urls, err := store.GetByUserID(r.Context(), userID)
 		if err != nil || len(urls) == 0 {
 			w.WriteHeader(http.StatusNoContent)
 			return

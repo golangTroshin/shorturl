@@ -77,8 +77,8 @@ func (c *compressReader) Close() error {
 	return c.zr.Close()
 }
 
-func GzipMiddleware(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func GzipMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ow := w
 
 		if isContentTypeAllowed(r.Header.Get("Content-Type")) && isEncodingTypeAllowed(r.Header.Values("Accept-Encoding")) {
@@ -100,7 +100,7 @@ func GzipMiddleware(h http.HandlerFunc) http.HandlerFunc {
 		}
 
 		h.ServeHTTP(ow, r)
-	}
+	})
 }
 
 func isEncodingTypeAllowed(acceptEncoding []string) bool {
@@ -116,11 +116,4 @@ func isContentTypeAllowed(contentType string) bool {
 	_, ok := allowedContentTypes[contentType]
 
 	return ok
-}
-
-func ChainMiddlewares(handler http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
-	for _, middleware := range middlewares {
-		handler = middleware(handler)
-	}
-	return handler
 }

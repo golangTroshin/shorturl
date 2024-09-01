@@ -67,13 +67,13 @@ func APIPostBatchHandler(store storage.Storage) http.HandlerFunc {
 		w.Header().Set("Content-Type", ContentTypeJSON)
 		w.WriteHeader(http.StatusCreated)
 
-		type responseBodyBanch struct {
+		type responseBodyBatch struct {
 			CorrelationID string `json:"correlation_id"`
 			ShortURL      string `json:"short_url"`
 		}
-		var responseBodies []responseBodyBanch
+		var responseBodies []responseBodyBatch
 		for _, url := range urlObjs {
-			responseBody := responseBodyBanch{
+			responseBody := responseBodyBatch{
 				CorrelationID: url.UUID,
 				ShortURL:      config.Options.FlagBaseURL + "/" + url.ShortURL,
 			}
@@ -101,18 +101,7 @@ func APIDeleteUrlsHandler(store storage.Storage) http.HandlerFunc {
 			return
 		}
 
-		authToken, err := r.Cookie(middleware.CookieAuthToken)
-		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		if authToken.Value == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		userID := authToken.Value
+		userID := r.Context().Value(middleware.UserIDKey).(string)
 		log.Printf("urls: %v, user: %v", urlIDs, userID)
 
 		deleteChan <- deleteRequest{URLIDs: urlIDs, UserID: userID}

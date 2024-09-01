@@ -34,32 +34,16 @@ func main() {
 func Router(store storage.Storage) chi.Router {
 	r := chi.NewRouter()
 
-	r.Post("/", middleware.ChainMiddlewares(handlers.PostRequestHandler(store),
-		middleware.GiveAuthTokenToUser,
-		middleware.GzipMiddleware,
-		logger.LoggingWrapper,
-	))
+	r.Use(middleware.GzipMiddleware, logger.LoggingWrapper)
 
-	r.Post("/api/shorten", middleware.ChainMiddlewares(handlers.APIPostHandler(store),
-		middleware.GiveAuthTokenToUser,
-		middleware.GzipMiddleware,
-		logger.LoggingWrapper,
-	))
+	r.With(middleware.GiveAuthTokenToUser).Post("/", handlers.PostRequestHandler(store))
+	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten", handlers.APIPostHandler(store))
+	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten/batch", handlers.APIPostBatchHandler(store))
 
-	r.Post("/api/shorten/batch", middleware.ChainMiddlewares(handlers.APIPostBatchHandler(store),
-		middleware.GiveAuthTokenToUser,
-		middleware.GzipMiddleware,
-		logger.LoggingWrapper,
-	))
-
-	r.Get("/{id}", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetRequestHandler(store))))
-	r.Get("/api/user/urls", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetURLsByUserHandler(store))))
-	r.Get("/ping", logger.LoggingWrapper(handlers.DatabasePing()))
-
-	r.Delete("/api/user/urls", middleware.ChainMiddlewares(handlers.APIDeleteUrlsHandler(store),
-		middleware.GzipMiddleware,
-		logger.LoggingWrapper,
-	))
+	r.Get("/{id}", handlers.GetRequestHandler(store))
+	r.Get("/ping", handlers.DatabasePing())
+	r.With(middleware.CheckAuthToken).Get("/api/user/urls", handlers.GetURLsByUserHandler(store))
+	r.With(middleware.CheckAuthToken).Delete("/api/user/urls", handlers.APIDeleteUrlsHandler(store))
 
 	return r
 }
