@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/golangTroshin/shorturl/internal/app/config"
+	"github.com/golangTroshin/shorturl/internal/app/middleware"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -47,7 +49,7 @@ func PostRequestHandler(store storage.Storage) http.HandlerFunc {
 	return http.HandlerFunc(fn)
 }
 
-func GetRequestHandler(storage storage.Storage) http.HandlerFunc {
+func GetRequestHandler(store storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
@@ -55,15 +57,59 @@ func GetRequestHandler(storage storage.Storage) http.HandlerFunc {
 			return
 		}
 
-		val, err := storage.Get(r.Context(), id)
+		status := http.StatusTemporaryRedirect
+
+		val, err := store.Get(r.Context(), id)
 		if err != nil {
-			http.Error(w, "No info about requested route", http.StatusNotFound)
+			var target *storage.DeletedURLError
+
+			if errors.As(err, &target) {
+				status = http.StatusGone
+			} else {
+				http.Error(w, "No info about requested route", http.StatusNotFound)
+				return
+			}
+		} else {
+			w.Header().Set("Content-Type", ContentTypePlainText)
+			w.Header().Set("Location", val)
+		}
+
+		w.WriteHeader(status)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
+func GetURLsByUserHandler(store storage.Storage) http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		userID := r.Context().Value(middleware.UserIDKey).(string)
+		urls, err := store.GetByUserID(r.Context(), userID)
+		if err != nil || len(urls) == 0 {
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		w.Header().Set("Content-Type", ContentTypePlainText)
-		w.Header().Set("Location", val)
-		w.WriteHeader(http.StatusTemporaryRedirect)
+		type responseGetByUserID struct {
+			ShortURL    string `json:"short_url"`
+			OriginalURL string `json:"original_url"`
+		}
+		w.Header().Set("Content-Type", ContentTypeJSON)
+		var responseBodies []responseGetByUserID
+		for _, url := range urls {
+			responseBody := responseGetByUserID{
+				ShortURL:    config.Options.FlagBaseURL + "/" + url.ShortURL,
+				OriginalURL: url.OriginalURL,
+			}
+			responseBodies = append(responseBodies, responseBody)
+		}
+
+		log.Printf("responseBodies %v", responseBodies)
+
+		if err := json.NewEncoder(w).Encode(&responseBodies); err != nil {
+			log.Printf("Unable to write reponse: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	return http.HandlerFunc(fn)
@@ -77,13 +123,13 @@ func DatabasePing() http.HandlerFunc {
 			http.Error(w, "Unable to connect to database", http.StatusInternalServerError)
 		}
 
+		defer db.Close()
+
 		err = db.Ping()
 		if err != nil {
 			log.Printf("Unable to write reponse: %v", err)
 			http.Error(w, "Unable to reach database", http.StatusInternalServerError)
 		}
-
-		defer db.Close()
 	}
 
 	return http.HandlerFunc(fn)

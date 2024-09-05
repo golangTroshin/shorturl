@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -29,11 +28,11 @@ func (r *loggingResponseWriter) Write(b []byte) (int, error) {
 
 func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 	r.ResponseWriter.WriteHeader(statusCode)
-	fmt.Println("status", statusCode)
+	log.Println("status", statusCode)
 	r.responseData.status = statusCode
 }
 
-func LoggingWrapper(h http.HandlerFunc) http.HandlerFunc {
+func LoggingWrapper(h http.Handler) http.Handler {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
 		logger, err := zap.NewDevelopment()
 		if err != nil {

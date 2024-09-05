@@ -24,6 +24,8 @@ func main() {
 
 	defer storage.CloseDB()
 
+	go handlers.StartDeleteWorker(store)
+
 	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
@@ -32,12 +34,16 @@ func main() {
 func Router(store storage.Storage) chi.Router {
 	r := chi.NewRouter()
 
-	r.Post("/", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.PostRequestHandler(store))))
-	r.Post("/api/shorten", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.APIPostHandler(store))))
-	r.Post("/api/shorten/batch", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.APIPostBatchHandler(store))))
+	r.Use(middleware.GzipMiddleware, logger.LoggingWrapper)
 
-	r.Get("/{id}", logger.LoggingWrapper(middleware.GzipMiddleware(handlers.GetRequestHandler(store))))
-	r.Get("/ping", logger.LoggingWrapper(handlers.DatabasePing()))
+	r.With(middleware.GiveAuthTokenToUser).Post("/", handlers.PostRequestHandler(store))
+	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten", handlers.APIPostHandler(store))
+	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten/batch", handlers.APIPostBatchHandler(store))
+
+	r.Get("/{id}", handlers.GetRequestHandler(store))
+	r.Get("/ping", handlers.DatabasePing())
+	r.With(middleware.CheckAuthToken).Get("/api/user/urls", handlers.GetURLsByUserHandler(store))
+	r.With(middleware.CheckAuthToken).Delete("/api/user/urls", handlers.APIDeleteUrlsHandler(store))
 
 	return r
 }
