@@ -66,3 +66,28 @@ func (store *MemoryStore) SetBatch(ctx context.Context, urls []RequestBodyBanch)
 
 	return URLs, nil
 }
+
+func (store *MemoryStore) BatchDeleteURLs(userID string, batch []string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if len(store.urlList) == 0 {
+		return errors.New("no URLs in the store")
+	}
+
+	batchMap := make(map[string]struct{})
+	for _, shortURL := range batch {
+		batchMap[shortURL] = struct{}{}
+	}
+
+	for key, url := range store.urlList {
+		if url.UserID == userID {
+			if _, found := batchMap[url.ShortURL]; found {
+				url.DeletedFlag = true
+				store.urlList[key] = url
+			}
+		}
+	}
+
+	return nil
+}

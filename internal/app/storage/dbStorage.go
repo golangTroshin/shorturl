@@ -31,6 +31,22 @@ func NewInsertConflictError() error {
 	}
 }
 
+type DeletedURLError struct {
+	Time time.Time
+	Err  error
+}
+
+func (te *DeletedURLError) Error() string {
+	return fmt.Sprintf("%v %v", te.Time.Format("2006/01/02 15:04:05"), te.Err)
+}
+
+func NewDeletedURLError() error {
+	return &DeletedURLError{
+		Time: time.Now(),
+		Err:  fmt.Errorf("url was deleted"),
+	}
+}
+
 func initDB() error {
 	var err error
 	DB, err = sql.Open("pgx", config.Options.DatabaseDsn)
@@ -74,7 +90,8 @@ func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error)
 	query := `SELECT origin_url FROM urls WHERE short_url = $1;`
 
 	var originalURL string
-	err := DB.QueryRowContext(ctx, query, key).Scan(&originalURL)
+	var isDeleted bool
+	err := DB.QueryRowContext(ctx, query, key).Scan(&originalURL, &isDeleted)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("there is no rows: %v", err)
@@ -85,7 +102,12 @@ func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error)
 		return "", err
 	}
 
-	log.Printf("url is found: %v", originalURL)
+	log.Printf("url is found: %v %v", originalURL, isDeleted)
+	if isDeleted {
+		log.Printf("url was deleted: %v", originalURL)
+		return "", NewDeletedURLError()
+	}
+
 	return originalURL, nil
 }
 
@@ -131,8 +153,30 @@ func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) 
 
 		return url, err
 	}
+	defer rows.Close()
 
-	defer tx.Rollback()
+	for rows.Next() {
+		var url URL
+		err := rows.Scan(&url.OriginalURL, &url.ShortURL)
+		if err != nil {
+			log.Printf("error scanning row: %v", err)
+			return nil, err
+		}
+		URLs = append(URLs, url)
+	}
+
+	return URLs, nil
+}
+
+func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) {
+	ctxValue := ctx.Value(middleware.UserIDKey)
+	if ctxValue == nil {
+		return URL{}, fmt.Errorf("ctxValue is nil: %v", ctxValue)
+	}
+
+	userID := ctxValue.(string)
+	log.Printf("userID: %v", userID)
+	url := getURLObject(value, userID)
 
 	result, err := DB.ExecContext(ctx, `
         INSERT INTO urls (origin_url, short_url, user_id)
@@ -219,6 +263,28 @@ func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBan
 	}
 
 	return URLs, nil
+}
+
+func (store *DatabaseStore) BatchDeleteURLs(userID string, urlIDs []string) error {
+	log.Printf("Start delete: %v %v", urlIDs, userID)
+	query := `UPDATE urls SET is_deleted = TRUE WHERE short_url = ANY($1) AND user_id = $2`
+
+	result, err := DB.Exec(query, pq.Array(urlIDs), userID)
+
+	if err != nil {
+		log.Printf("Error deleting URLs: %v", err)
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("Error fetching rows affected: %v", err)
+		return err
+	}
+
+	log.Printf("Rows affected: %d", rowsAffected)
+
+	return nil
 }
 
 func createTableIfNotExists() error {

@@ -24,6 +24,8 @@ func main() {
 
 	defer storage.CloseDB()
 
+	go handlers.StartDeleteWorker(store)
+
 	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}

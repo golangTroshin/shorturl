@@ -14,6 +14,7 @@ type Storage interface {
 	GetByUserID(ctx context.Context, userID string) ([]URL, error)
 	Set(ctx context.Context, value string) (URL, error)
 	SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error)
+	BatchDeleteURLs(userID string, batch []string) error
 }
 
 type URL struct {
