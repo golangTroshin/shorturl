@@ -22,7 +22,7 @@ var (
 		DatabaseDsn     string `env:"DATABASE_DSN"`
 	}
 
-	once sync.Once
+	Once sync.Once
 )
 
 func ParseFlags() error {
@@ -31,7 +31,7 @@ func ParseFlags() error {
 		return err
 	}
 
-	once.Do(func() {
+	Once.Do(func() {
 		flag.StringVar(&Options.FlagServiceAddress, "a", ":8080", "address and port to run server")
 		flag.StringVar(&Options.FlagBaseURL, "b", "http://localhost:8080", "base result url")
 		flag.StringVar(&Options.StoragePath, "f", "", "storage path")

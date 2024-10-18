@@ -23,7 +23,7 @@ func BuildJWTString() (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExp)),
 		},
-		UserID: generateRandomUserID(10),
+		UserID: GenerateRandomUserID(10),
 	})
 
 	tokenString, err := token.SignedString([]byte(secretKey))
@@ -57,7 +57,7 @@ func GetUserIDByToken(tokenString string) string {
 	return claims.UserID
 }
 
-func generateRandomUserID(length int) string {
+func GenerateRandomUserID(length int) string {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
