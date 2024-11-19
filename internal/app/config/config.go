@@ -1,3 +1,7 @@
+// Package config is responsible for parsing command-line flags and environment variables.
+//
+// It provides structures to handle application configuration, merging values from flags
+// and environment variables into a unified configuration.
 package config
 
 import (
@@ -7,24 +11,37 @@ import (
 	"github.com/caarlos0/env/v6"
 )
 
+// Vars Options and Config
 var (
+	// Options contains the configuration values parsed from command-line flags.
 	Options struct {
-		FlagServiceAddress string
-		FlagBaseURL        string
-		StoragePath        string
-		DatabaseDsn        string
+		FlagServiceAddress string // FlagServiceAddress: The address and port for the server to run on (e.g., ":8080").
+		FlagBaseURL        string // FlagBaseURL: The base URL used for constructing short URLs (e.g., http://localhost:8080).
+		StoragePath        string // StoragePath: The file path for storing data (e.g., "/tmp/storage").
+		DatabaseDsn        string // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
 	}
 
+	// Config contains the configuration values parsed from environment variables.
 	Config struct {
-		ServerAddress   string `env:"SERVER_ADDRESS"`
-		BaseURL         string `env:"BASE_URL"`
-		FileStoragePath string `env:"FILE_STORAGE_PATH"`
-		DatabaseDsn     string `env:"DATABASE_DSN"`
+		ServerAddress   string `env:"SERVER_ADDRESS"`    // ServerAddress: The address and port for the server to run on (e.g., ":8080").
+		BaseURL         string `env:"BASE_URL"`          // BaseURL: The base URL used for constructing short URLs (e.g., http://localhost:8080).
+		FileStoragePath string `env:"FILE_STORAGE_PATH"` // FileStoragePath: The file path for storing data (e.g., "/tmp/storage").
+		DatabaseDsn     string `env:"DATABASE_DSN"`      // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
 	}
 
+	// Once makes sure that flags parsing run once
 	Once sync.Once
 )
 
+// ParseFlags parses configuration values from both command-line flags and environment variables.
+//
+// Priority is given to command-line flags if both flags and environment variables are set.
+//
+// Environment variables are loaded using the github.com/caarlos0/env/v6 package,
+// and flags are defined and parsed using the `flag` package.
+//
+// Returns:
+//   - error: If environment variables cannot be parsed.
 func ParseFlags() error {
 	err := env.Parse(&Config)
 	if err != nil {

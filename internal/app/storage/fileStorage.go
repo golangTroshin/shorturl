@@ -12,11 +12,15 @@ import (
 	"github.com/golangTroshin/shorturl/internal/app/middleware"
 )
 
+// FileStore represents the file-based storage for URLs.
+// It uses in-memory synchronization with a file to persist and retrieve URL data.
 type FileStore struct {
 	mu      sync.RWMutex
 	urlList map[string]URL
 }
 
+// NewFileStore initializes and returns a new FileStore instance.
+// It loads existing data from the file specified in the configuration.
 func NewFileStore() (*FileStore, error) {
 	store := &FileStore{
 		urlList: make(map[string]URL),
@@ -30,6 +34,8 @@ func NewFileStore() (*FileStore, error) {
 	return store, nil
 }
 
+// Get retrieves the original URL corresponding to a short URL.
+// Returns an error if the short URL does not exist in the store.
 func (store *FileStore) Get(ctx context.Context, key string) (string, error) {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
@@ -42,12 +48,16 @@ func (store *FileStore) Get(ctx context.Context, key string) (string, error) {
 	return val.OriginalURL, nil
 }
 
+// GetByUserID retrieves all URLs associated with a given user ID.
+// Currently, the implementation does not return any data (placeholder).
 func (store *FileStore) GetByUserID(ctx context.Context, userID string) ([]URL, error) {
 	var URLs []URL
 
 	return URLs, nil
 }
 
+// Set adds a new URL to the store, generating a unique short URL for it.
+// The URL is written to the file for persistence.
 func (store *FileStore) Set(ctx context.Context, value string) (URL, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -69,6 +79,8 @@ func (store *FileStore) Set(ctx context.Context, value string) (URL, error) {
 	return url, nil
 }
 
+// SetBatch adds multiple URLs to the store in a single operation.
+// Each URL is persisted to the file.
 func (store *FileStore) SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error) {
 	var URLs []URL
 
@@ -96,6 +108,8 @@ func (store *FileStore) SetBatch(ctx context.Context, batch []RequestBodyBanch) 
 	return URLs, nil
 }
 
+// BatchDeleteURLs marks multiple URLs as deleted for a specific user ID.
+// Updates are made in memory; persistence is not yet implemented.
 func (store *FileStore) BatchDeleteURLs(userID string, batch []string) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -121,6 +135,7 @@ func (store *FileStore) BatchDeleteURLs(userID string, batch []string) error {
 	return nil
 }
 
+// loadFromFile loads URL data from the file into the in-memory store.
 func (store *FileStore) loadFromFile() error {
 	consumer, err := NewConsumer(config.Options.StoragePath)
 	if err != nil {
@@ -144,11 +159,13 @@ func (store *FileStore) loadFromFile() error {
 	return nil
 }
 
+// Producer is responsible for writing URL data to the file in JSON format.
 type Producer struct {
 	file   *os.File
 	writer *bufio.Writer
 }
 
+// NewProducer creates a new Producer for writing to the specified file path.
 func NewProducer(filePath string) (*Producer, error) {
 	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
@@ -161,10 +178,12 @@ func NewProducer(filePath string) (*Producer, error) {
 	}, nil
 }
 
+// Close closes the file handle for the Producer.
 func (p *Producer) Close() error {
 	return p.file.Close()
 }
 
+// WriteURL writes a URL object to the file in JSON format, appending a newline.
 func (p *Producer) WriteURL(url *URL) error {
 	data, err := json.Marshal(&url)
 	if err != nil {
@@ -182,11 +201,13 @@ func (p *Producer) WriteURL(url *URL) error {
 	return p.writer.Flush()
 }
 
+// Consumer is responsible for reading URL data from the file in JSON format.
 type Consumer struct {
 	file   *os.File
 	reader *bufio.Reader
 }
 
+// NewConsumer creates a new Consumer for reading from the specified file path.
 func NewConsumer(filename string) (*Consumer, error) {
 	file, err := os.OpenFile(filename, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
@@ -199,6 +220,7 @@ func NewConsumer(filename string) (*Consumer, error) {
 	}, nil
 }
 
+// ReadURL reads and unmarshals a URL object from the file.
 func (c *Consumer) ReadURL() (*URL, error) {
 	data, err := c.reader.ReadBytes('\n')
 	if err != nil {
@@ -214,6 +236,7 @@ func (c *Consumer) ReadURL() (*URL, error) {
 	return &url, nil
 }
 
+// Close closes the file handle for the Consumer.
 func (c *Consumer) Close() error {
 	return c.file.Close()
 }
