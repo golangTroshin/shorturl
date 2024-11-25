@@ -38,7 +38,7 @@ func (store *MemoryStore) Get(ctx context.Context, key string) (string, error) {
 
 // GetByUserID retrieves all URLs associated with a given user ID.
 // Currently, the implementation returns an empty list (placeholder).
-func (store *MemoryStore) GetByUserID(ctx context.Context, userID string) ([]URL, error) {
+func (store *MemoryStore) GetByUserID(_ context.Context, userID string) ([]URL, error) {
 	var URLs []URL
 
 	return URLs, nil
@@ -64,7 +64,7 @@ func (store *MemoryStore) Set(ctx context.Context, value string) (URL, error) {
 // SetBatch adds multiple URLs to the store in a single operation.
 // Each URL is associated with a user ID derived from the context.
 func (store *MemoryStore) SetBatch(ctx context.Context, urls []RequestBodyBanch) ([]URL, error) {
-	var URLs []URL
+	URLs := make([]URL, 0, len(urls))
 	store.mu.Lock()
 	defer store.mu.Unlock()
 

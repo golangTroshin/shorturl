@@ -130,7 +130,12 @@ func GetRequestHandler(store storage.Storage) http.HandlerFunc {
 //   - http.HandlerFunc: A handler function to process the request.
 func GetURLsByUserHandler(store storage.Storage) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value(middleware.UserIDKey).(string)
+		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		if !ok || userID == "" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		urls, err := store.GetByUserID(r.Context(), userID)
 		if err != nil || len(urls) == 0 {
 			w.WriteHeader(http.StatusNoContent)

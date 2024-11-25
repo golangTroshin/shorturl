@@ -216,7 +216,7 @@ func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) 
 // SetBatch inserts multiple URLs into the database within a single transaction.
 // If any operation fails, the transaction is rolled back.
 func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error) {
-	var URLs []URL
+	URLs := make([]URL, 0, len(batch))
 
 	tx, err := DB.Begin()
 	if err != nil {

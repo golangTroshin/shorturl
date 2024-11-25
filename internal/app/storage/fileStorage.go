@@ -50,7 +50,7 @@ func (store *FileStore) Get(ctx context.Context, key string) (string, error) {
 
 // GetByUserID retrieves all URLs associated with a given user ID.
 // Currently, the implementation does not return any data (placeholder).
-func (store *FileStore) GetByUserID(ctx context.Context, userID string) ([]URL, error) {
+func (store *FileStore) GetByUserID(_ context.Context, userID string) ([]URL, error) {
 	var URLs []URL
 
 	return URLs, nil
@@ -82,7 +82,7 @@ func (store *FileStore) Set(ctx context.Context, value string) (URL, error) {
 // SetBatch adds multiple URLs to the store in a single operation.
 // Each URL is persisted to the file.
 func (store *FileStore) SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error) {
-	var URLs []URL
+	URLs := make([]URL, 0, len(batch))
 
 	store.mu.Lock()
 	defer store.mu.Unlock()

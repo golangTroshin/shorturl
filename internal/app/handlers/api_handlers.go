@@ -132,7 +132,12 @@ func APIDeleteUrlsHandler(store storage.Storage) http.HandlerFunc {
 			return
 		}
 
-		userID := r.Context().Value(middleware.UserIDKey).(string)
+		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		if !ok || userID == "" {
+			log.Printf("Wrong userID: %v", userID)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		log.Printf("urls: %v, user: %v", urlIDs, userID)
 
 		deleteChan <- deleteRequest{URLIDs: urlIDs, UserID: userID}
