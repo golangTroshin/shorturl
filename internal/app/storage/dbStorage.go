@@ -12,19 +12,27 @@ import (
 	"github.com/lib/pq"
 )
 
+// DatabaseStore represents the structure for database operations.
+// It encapsulates methods to interact with the PostgreSQL database for URL shortening service.
 type DatabaseStore struct{}
 
+// DB represents the global database connection instance used by DatabaseStore.
 var DB *sql.DB
 
+// InsertConflictError represents an error when a conflict occurs during an INSERT operation,
+// typically due to a unique constraint violation.
 type InsertConflictError struct {
 	Time time.Time
 	Err  error
 }
 
+// Error returns a formatted error message with the timestamp and details of the conflict.
 func (te *InsertConflictError) Error() string {
 	return fmt.Sprintf("%v %v", te.Time.Format("2006/01/02 15:04:05"), te.Err)
 }
 
+// NewInsertConflictError creates a new instance of InsertConflictError
+// indicating a conflict due to an already existing origin URL.
 func NewInsertConflictError() error {
 	return &InsertConflictError{
 		Time: time.Now(),
@@ -32,15 +40,19 @@ func NewInsertConflictError() error {
 	}
 }
 
+// DeletedURLError represents an error when a requested URL has been marked as deleted.
 type DeletedURLError struct {
 	Time time.Time
 	Err  error
 }
 
+// Error returns a formatted error message with the timestamp and details of the deletion.
 func (te *DeletedURLError) Error() string {
 	return fmt.Sprintf("%v %v", te.Time.Format("2006/01/02 15:04:05"), te.Err)
 }
 
+// NewDeletedURLError creates a new instance of DeletedURLError
+// indicating the requested URL was deleted.
 func NewDeletedURLError() error {
 	return &DeletedURLError{
 		Time: time.Now(),
@@ -48,6 +60,8 @@ func NewDeletedURLError() error {
 	}
 }
 
+// initDB initializes the database connection using the configuration.
+// Returns an error if the connection cannot be established.
 func initDB() error {
 	var err error
 	DB, err = sql.Open("pgx", config.Options.DatabaseDsn)
@@ -63,6 +77,8 @@ func initDB() error {
 	return nil
 }
 
+// CloseDB closes the active database connection.
+// Logs any error encountered during the closure.
 func CloseDB() {
 	if DB != nil {
 		if err := DB.Close(); err != nil {
@@ -73,6 +89,8 @@ func CloseDB() {
 	}
 }
 
+// NewDatabaseStore creates a new DatabaseStore instance and initializes the database connection.
+// Ensures that the necessary database table exists.
 func NewDatabaseStore() (*DatabaseStore, error) {
 	store := &DatabaseStore{}
 
@@ -87,6 +105,8 @@ func NewDatabaseStore() (*DatabaseStore, error) {
 	return store, nil
 }
 
+// Get retrieves the original URL for a given short URL from the database.
+// If the short URL is marked as deleted, it returns a DeletedURLError.
 func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error) {
 	query := `SELECT origin_url, is_deleted FROM urls WHERE short_url = $1;`
 
@@ -112,6 +132,8 @@ func (store *DatabaseStore) Get(ctx context.Context, key string) (string, error)
 	return originalURL, nil
 }
 
+// GetByUserID retrieves all URLs associated with a given user ID.
+// Returns a slice of URLs or an error if the query fails.
 func (store *DatabaseStore) GetByUserID(ctx context.Context, userID string) ([]URL, error) {
 	var URLs []URL
 
@@ -138,6 +160,9 @@ func (store *DatabaseStore) GetByUserID(ctx context.Context, userID string) ([]U
 	return URLs, nil
 }
 
+// Set inserts a new URL into the database with the provided original URL and user ID.
+// If the original URL already exists, it retrieves the existing short URL and returns
+// an InsertConflictError.
 func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) {
 	ctxValue := ctx.Value(middleware.UserIDKey)
 	if ctxValue == nil {
@@ -188,8 +213,10 @@ func (store *DatabaseStore) Set(ctx context.Context, value string) (URL, error) 
 	return url, nil
 }
 
+// SetBatch inserts multiple URLs into the database within a single transaction.
+// If any operation fails, the transaction is rolled back.
 func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error) {
-	var URLs []URL
+	URLs := make([]URL, 0, len(batch))
 
 	tx, err := DB.Begin()
 	if err != nil {
@@ -229,6 +256,8 @@ func (store *DatabaseStore) SetBatch(ctx context.Context, batch []RequestBodyBan
 	return URLs, nil
 }
 
+// BatchDeleteURLs marks multiple URLs as deleted for a specific user ID.
+// Returns an error if the operation fails.
 func (store *DatabaseStore) BatchDeleteURLs(userID string, urlIDs []string) error {
 	log.Printf("Start delete: %v %v", urlIDs, userID)
 	query := `UPDATE urls SET is_deleted = TRUE WHERE short_url = ANY($1) AND user_id = $2`

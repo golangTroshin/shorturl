@@ -9,35 +9,44 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// Storage defines the interface for a URL storage system. It supports CRUD
+// operations for URLs and batch operations for managing multiple URLs.
 type Storage interface {
-	Get(ctx context.Context, key string) (string, error)
-	GetByUserID(ctx context.Context, userID string) ([]URL, error)
-	Set(ctx context.Context, value string) (URL, error)
-	SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error)
-	BatchDeleteURLs(userID string, batch []string) error
+	Get(ctx context.Context, key string) (string, error)                   // Get retrieves the original URL corresponding to the given short URL.
+	GetByUserID(ctx context.Context, userID string) ([]URL, error)         // GetByUserID retrieves all URLs associated with the specified user ID.
+	Set(ctx context.Context, value string) (URL, error)                    // Set creates and stores a new short URL for the given original URL.
+	SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error) // SetBatch stores multiple URLs in a single operation.
+	BatchDeleteURLs(userID string, batch []string) error                   // BatchDeleteURLs marks multiple URLs as deleted for a specific user.
 }
 
+// URL represents a mapping between a short URL and its original URL.
+// It includes metadata such as user ownership and deletion status.
 type URL struct {
-	UUID        string `json:"uuid"`
-	ShortURL    string `json:"short_url"`
-	OriginalURL string `json:"original_url"`
-	UserID      string
-	DeletedFlag bool `db:"is_deleted"`
+	UUID        string `json:"uuid"`         // Unique identifier for the URL
+	ShortURL    string `json:"short_url"`    // Shortened URL key
+	OriginalURL string `json:"original_url"` // Original URL
+	UserID      string // User who owns the URL
+	DeletedFlag bool   `db:"is_deleted"` // Indicates if the URL has been deleted
 }
 
+// RequestURL represents the structure for incoming API requests to shorten a URL.
 type RequestURL struct {
-	URL string `json:"url"`
+	URL string `json:"url"` // The original URL to be shortened
 }
 
+// ResponseShortURL represents the structure of the API response for a shortened URL.
 type ResponseShortURL struct {
-	ShortURL string `json:"result"`
+	ShortURL string `json:"result"` // The generated short URL
 }
 
+// RequestBodyBanch represents the structure of a batch request for shortening multiple URLs.
 type RequestBodyBanch struct {
-	CorrelationID string `json:"correlation_id"`
-	OriginalURL   string `json:"original_url"`
+	CorrelationID string `json:"correlation_id"` // Identifier for the batch request
+	OriginalURL   string `json:"original_url"`   // The original URL to be shortened
 }
 
+// GetStorageByConfig initializes and returns the appropriate storage system
+// based on the application configuration (e.g., database, file, or memory storage).
 func GetStorageByConfig() (Storage, error) {
 	var store Storage
 	var err error
