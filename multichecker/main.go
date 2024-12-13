@@ -28,37 +28,36 @@ import (
 // The goal is to provide a comprehensive analysis tool to ensure code quality,
 // correctness, and maintainability.
 func main() {
+	multichecker.Main(getAnalyzers()...)
+}
+
+func getAnalyzers() []*analysis.Analyzer {
 	var analyzers []*analysis.Analyzer
 
 	// Add standard analyzers from golang.org/x/tools/go/analysis/passes
 	analyzers = append(analyzers,
-		asmdecl.Analyzer,   // Checks assembly declarations
-		assign.Analyzer,    // Detects suspicious assignments
-		atomic.Analyzer,    // Flags incorrect atomic operations
-		bools.Analyzer,     // Identifies common mistakes with boolean operations
-		buildtag.Analyzer,  // Validates build tags
-		cgocall.Analyzer,   // Detects unsafe cgo calls
-		composite.Analyzer, // Flags composite literals that use unkeyed fields
-		copylock.Analyzer,  // Detects locks passed by value
+		asmdecl.Analyzer,
+		assign.Analyzer,
+		atomic.Analyzer,
+		bools.Analyzer,
+		buildtag.Analyzer,
+		cgocall.Analyzer,
+		composite.Analyzer,
+		copylock.Analyzer,
 	)
 
 	// Add SA analyzers from staticcheck.io
 	for _, v := range staticcheck.Analyzers {
-		// Include only analyzers with names starting with "SA"
 		if v.Analyzer.Name[:2] == "SA" {
 			analyzers = append(analyzers, v.Analyzer)
 		}
 	}
 
 	// Add additional analyzers from staticcheck.io
-	// - Simple: Finds simple issues (e.g., redundant code)
-	// - Stylecheck: Enforces coding style guidelines
 	analyzers = append(analyzers, simple.Analyzers[0].Analyzer, stylecheck.Analyzers[0].Analyzer)
 
-	// Add the custom analyzer (defined elsewhere in the same package)
-	// This custom analyzer checks for direct calls to os.Exit in the main function.
+	// Add the custom analyzer
 	analyzers = append(analyzers, Analyzer)
 
-	// Run the multichecker with the selected analyzers
-	multichecker.Main(analyzers...)
+	return analyzers
 }

@@ -39,9 +39,16 @@ func (store *MemoryStore) Get(ctx context.Context, key string) (string, error) {
 // GetByUserID retrieves all URLs associated with a given user ID.
 // Currently, the implementation returns an empty list (placeholder).
 func (store *MemoryStore) GetByUserID(_ context.Context, userID string) ([]URL, error) {
-	var URLs []URL
+	store.mu.RLock()
+	defer store.mu.RUnlock()
 
-	return URLs, nil
+	var urls []URL
+	for _, url := range store.urlList {
+		if url.UserID == userID {
+			urls = append(urls, url)
+		}
+	}
+	return urls, nil
 }
 
 // Set adds a new URL to the store, generating a unique short URL for it.

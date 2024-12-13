@@ -39,12 +39,12 @@ func main() {
 	fmt.Printf("Build commit: %s\n", buildCommit)
 
 	if err := config.ParseFlags(); err != nil {
-		log.Fatalf("error ocured while parsing flags: %v", err)
+		log.Printf("error ocured while parsing flags: %v", err)
 	}
 
 	store, err := storage.GetStorageByConfig()
 	if err != nil {
-		log.Fatalf("failed to init store: %v", err)
+		log.Printf("failed to init store: %v", err)
 	}
 
 	defer storage.CloseDB()
@@ -52,7 +52,7 @@ func main() {
 	go handlers.StartDeleteWorker(store)
 
 	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		log.Printf("failed to start server: %v", err)
 	}
 }
 
