@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -14,6 +15,12 @@ import (
 	"github.com/golangTroshin/shorturl/internal/app/logger"
 	"github.com/golangTroshin/shorturl/internal/app/middleware"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
+)
+
+var (
+	buildVersion = "N/A" // build version, set during build time
+	buildDate    = "N/A" // build date, set during build time
+	buildCommit  = "N/A" // build commit hash, set during build time
 )
 
 // main is the entry point of the application.
@@ -26,13 +33,18 @@ import (
 //
 // Logs fatal errors if configuration parsing, storage initialization, or server startup fails.
 func main() {
+	// Print build information
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
+
 	if err := config.ParseFlags(); err != nil {
-		log.Fatalf("error ocured while parsing flags: %v", err)
+		log.Printf("error ocured while parsing flags: %v", err)
 	}
 
 	store, err := storage.GetStorageByConfig()
 	if err != nil {
-		log.Fatalf("failed to init store: %v", err)
+		log.Printf("failed to init store: %v", err)
 	}
 
 	defer storage.CloseDB()
@@ -40,7 +52,7 @@ func main() {
 	go handlers.StartDeleteWorker(store)
 
 	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		log.Printf("failed to start server: %v", err)
 	}
 }
 
