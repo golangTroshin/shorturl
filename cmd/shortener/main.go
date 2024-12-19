@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/golangTroshin/shorturl/internal/app/config"
 	"github.com/golangTroshin/shorturl/internal/app/handlers"
+	"github.com/golangTroshin/shorturl/internal/app/helpers"
 	"github.com/golangTroshin/shorturl/internal/app/logger"
 	"github.com/golangTroshin/shorturl/internal/app/middleware"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
@@ -51,7 +52,16 @@ func main() {
 
 	go handlers.StartDeleteWorker(store)
 
-	if err := http.ListenAndServe(config.Options.FlagServiceAddress, Router(store)); err != nil {
+	if config.Options.EnableHTTPS {
+		crt, key := helpers.GetTLSCertificate()
+		helpers.SaveToFile("crt", crt)
+		helpers.SaveToFile("key", key)
+		err = http.ListenAndServeTLS(config.Options.FlagServiceAddress, "crt", "key", Router(store))
+	} else {
+		err = http.ListenAndServe(config.Options.FlagServiceAddress, Router(store))
+	}
+
+	if err != nil {
 		log.Printf("failed to start server: %v", err)
 	}
 }
