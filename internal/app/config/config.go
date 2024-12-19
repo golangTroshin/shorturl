@@ -19,6 +19,8 @@ var (
 		FlagBaseURL        string // FlagBaseURL: The base URL used for constructing short URLs (e.g., http://localhost:8080).
 		StoragePath        string // StoragePath: The file path for storing data (e.g., "/tmp/storage").
 		DatabaseDsn        string // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
+		EnableHTTPS        bool   // EnableHTTPS: Is https enable
+
 	}
 
 	// Config contains the configuration values parsed from environment variables.
@@ -27,6 +29,7 @@ var (
 		BaseURL         string `env:"BASE_URL"`          // BaseURL: The base URL used for constructing short URLs (e.g., http://localhost:8080).
 		FileStoragePath string `env:"FILE_STORAGE_PATH"` // FileStoragePath: The file path for storing data (e.g., "/tmp/storage").
 		DatabaseDsn     string `env:"DATABASE_DSN"`      // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
+		EnableHTTPS     bool   `env:"ENABLE_HTTPS"`      // EnableHTTPS: Is https enable
 	}
 
 	// Once makes sure that flags parsing run once
@@ -53,6 +56,7 @@ func ParseFlags() error {
 		flag.StringVar(&Options.FlagBaseURL, "b", "http://localhost:8080", "base result url")
 		flag.StringVar(&Options.StoragePath, "f", "", "storage path")
 		flag.StringVar(&Options.DatabaseDsn, "d", "", "database connection")
+		flag.BoolVar(&Options.EnableHTTPS, "s", false, "enable https")
 	})
 
 	if Config.ServerAddress != "" {
@@ -70,6 +74,8 @@ func ParseFlags() error {
 	if Config.DatabaseDsn != "" {
 		Options.DatabaseDsn = Config.DatabaseDsn
 	}
+
+	Options.EnableHTTPS = Config.EnableHTTPS
 
 	flag.Parse()
 
