@@ -5,11 +5,24 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
+	"log"
+	"os"
 	"sync"
 
 	"github.com/caarlos0/env/v6"
 )
+
+// ConfigStruct holds environment and file config values
+type ConfigStruct struct {
+	ServerAddress   string `env:"SERVER_ADDRESS" json:"server_address"`       // ServerAddress: The address and port for the server to run on (e.g., ":8080").
+	BaseURL         string `env:"BASE_URL" json:"base_url"`                   // BaseURL: The base URL used for constructing short URLs (e.g., http://localhost:8080).
+	FileStoragePath string `env:"FILE_STORAGE_PATH" json:"file_storage_path"` // FileStoragePath: The file path for storing data (e.g., "/tmp/storage").
+	DatabaseDsn     string `env:"DATABASE_DSN" json:"database_dsn"`           // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
+	EnableHTTPS     bool   `env:"ENABLE_HTTPS" json:"enable_https"`           // EnableHTTPS: Is https enable
+	ConfigPath      string `env:"CONFIG"`                                     // ConfigPath: config file path
+}
 
 // Vars Options and Config
 var (
@@ -20,17 +33,11 @@ var (
 		StoragePath        string // StoragePath: The file path for storing data (e.g., "/tmp/storage").
 		DatabaseDsn        string // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
 		EnableHTTPS        bool   // EnableHTTPS: Is https enable
-
+		ConfigPath         string // ConfigPath: config file path
 	}
 
 	// Config contains the configuration values parsed from environment variables.
-	Config struct {
-		ServerAddress   string `env:"SERVER_ADDRESS"`    // ServerAddress: The address and port for the server to run on (e.g., ":8080").
-		BaseURL         string `env:"BASE_URL"`          // BaseURL: The base URL used for constructing short URLs (e.g., http://localhost:8080).
-		FileStoragePath string `env:"FILE_STORAGE_PATH"` // FileStoragePath: The file path for storing data (e.g., "/tmp/storage").
-		DatabaseDsn     string `env:"DATABASE_DSN"`      // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
-		EnableHTTPS     bool   `env:"ENABLE_HTTPS"`      // EnableHTTPS: Is https enable
-	}
+	Config ConfigStruct
 
 	// Once makes sure that flags parsing run once
 	Once sync.Once
@@ -57,7 +64,24 @@ func ParseFlags() error {
 		flag.StringVar(&Options.StoragePath, "f", "", "storage path")
 		flag.StringVar(&Options.DatabaseDsn, "d", "", "database connection")
 		flag.BoolVar(&Options.EnableHTTPS, "s", false, "enable https")
+		flag.StringVar(&Options.ConfigPath, "c", "", "config file path")
 	})
+
+	if Config.ConfigPath != "" {
+		Options.ConfigPath = Config.ConfigPath
+	}
+	flag.Parse()
+
+	if Options.ConfigPath != "" {
+		cfg, err := loadConfig(Options.ConfigPath)
+		if err == nil {
+			Config = *cfg
+
+			log.Printf("Config from file: %v", Config)
+
+			return nil
+		}
+	}
 
 	if Config.ServerAddress != "" {
 		Options.FlagServiceAddress = Config.ServerAddress
@@ -80,4 +104,22 @@ func ParseFlags() error {
 	flag.Parse()
 
 	return nil
+}
+
+// loadConfig from JSON
+func loadConfig(path string) (*ConfigStruct, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		log.Print(err)
+
+		return nil, err
+	}
+	defer file.Close()
+
+	var config ConfigStruct
+	d := json.NewDecoder(file)
+	if err := d.Decode(&config); err != nil {
+		return nil, err
+	}
+	return &config, nil
 }
