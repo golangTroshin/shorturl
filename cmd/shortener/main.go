@@ -5,9 +5,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/golangTroshin/shorturl/internal/app/config"
@@ -32,7 +36,7 @@ var (
 //   - Sets up a background worker for URL deletions using `handlers.StartDeleteWorker`.
 //   - Starts the HTTP server with routes defined in the `Router` function.
 //
-// Logs fatal errors if configuration parsing, storage initialization, or server startup fails.
+// Logs errors if configuration parsing, storage initialization, or server startup fails.
 func main() {
 	// Print build information
 	fmt.Printf("Build version: %s\n", buildVersion)
@@ -40,30 +44,58 @@ func main() {
 	fmt.Printf("Build commit: %s\n", buildCommit)
 
 	if err := config.ParseFlags(); err != nil {
-		log.Printf("error ocured while parsing flags: %v", err)
+		log.Printf("error occurred while parsing flags: %v", err)
 	}
 
 	store, err := storage.GetStorageByConfig()
 	if err != nil {
-		log.Printf("failed to init store: %v", err)
+		log.Printf("failed to initialize storage: %v", err)
 	}
-
 	defer storage.CloseDB()
 
 	go handlers.StartDeleteWorker(store)
 
-	if config.Options.EnableHTTPS {
-		crt, key := helpers.GetTLSCertificate()
-		helpers.SaveToFile("crt", crt)
-		helpers.SaveToFile("key", key)
-		err = http.ListenAndServeTLS(config.Options.FlagServiceAddress, "crt", "key", Router(store))
-	} else {
-		err = http.ListenAndServe(config.Options.FlagServiceAddress, Router(store))
+	// Create context with cancellation
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
+
+	srv := &http.Server{
+		Addr:    config.Options.FlagServiceAddress,
+		Handler: Router(store),
 	}
 
-	if err != nil {
-		log.Printf("failed to start server: %v", err)
+	go func() {
+		var err error
+		if config.Options.EnableHTTPS {
+			crt, key := helpers.GetTLSCertificate()
+			helpers.SaveToFile("crt", crt)
+			helpers.SaveToFile("key", key)
+			err = srv.ListenAndServeTLS("crt", "key")
+		} else {
+			err = srv.ListenAndServe()
+		}
+
+		if err != nil && err != http.ErrServerClosed {
+			log.Printf("server error: %v", err)
+		}
+	}()
+
+	log.Println("Server is running...")
+
+	// Wait for termination signal
+	<-ctx.Done()
+	log.Println("Shutdown signal received")
+
+	// Create context for server shutdown
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Gracefully shutdown server
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("server shutdown failed: %v", err)
 	}
+
+	log.Println("Server gracefully stopped")
 }
 
 // Router sets up and returns a Chi router instance for the application.
