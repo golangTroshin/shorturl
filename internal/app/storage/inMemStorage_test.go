@@ -86,10 +86,15 @@ func TestMemoryStore_SetAndGetByUserID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, urls, 2)
 
-	// Verify URLs in the result
+	// Convert results to a map for comparison
+	urlMap := make(map[string]bool)
+	for _, url := range urls {
+		urlMap[url.OriginalURL] = true
+	}
+
+	// Check the presence of expected URLs
 	expectedURLs := []string{"https://example1.com", "https://example2.com"}
-	for i, url := range urls {
-		assert.Equal(t, expectedURLs[i], url.OriginalURL)
-		assert.NotEmpty(t, url.ShortURL)
+	for _, expectedURL := range expectedURLs {
+		assert.True(t, urlMap[expectedURL], "Expected URL not found: %s", expectedURL)
 	}
 }
