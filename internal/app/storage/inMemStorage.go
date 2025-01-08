@@ -110,3 +110,23 @@ func (store *MemoryStore) BatchDeleteURLs(userID string, batch []string) error {
 
 	return nil
 }
+
+// GetStats retrieves service statistic
+func (store *MemoryStore) GetStats(_ context.Context) (Stats, error) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	var stats Stats
+
+	stats.Urls = len(store.urlList)
+
+	userIDSet := make(map[string]struct{})
+
+	for _, url := range store.urlList {
+		userIDSet[url.UserID] = struct{}{}
+	}
+
+	stats.Users = len(userIDSet)
+
+	return stats, nil
+}

@@ -17,6 +17,7 @@ type Storage interface {
 	Set(ctx context.Context, value string) (URL, error)                    // Set creates and stores a new short URL for the given original URL.
 	SetBatch(ctx context.Context, batch []RequestBodyBanch) ([]URL, error) // SetBatch stores multiple URLs in a single operation.
 	BatchDeleteURLs(userID string, batch []string) error                   // BatchDeleteURLs marks multiple URLs as deleted for a specific user.
+	GetStats(ctx context.Context) (Stats, error)                           // GetStats retrieves service statistic
 }
 
 // URL represents a mapping between a short URL and its original URL.
@@ -27,6 +28,12 @@ type URL struct {
 	OriginalURL string `json:"original_url"` // Original URL
 	UserID      string // User who owns the URL
 	DeletedFlag bool   `db:"is_deleted"` // Indicates if the URL has been deleted
+}
+
+// Stats holds statistical information about saved URLs and users.
+type Stats struct {
+	Urls  int `json:"urls"`  // number of all saved urls
+	Users int `json:"users"` // number of all users
 }
 
 // RequestURL represents the structure for incoming API requests to shorten a URL.

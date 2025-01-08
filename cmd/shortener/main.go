@@ -127,6 +127,7 @@ func Router(store storage.Storage) chi.Router {
 	r.With(middleware.GiveAuthTokenToUser).Post("/", handlers.PostRequestHandler(store))
 	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten", handlers.APIPostHandler(store))
 	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten/batch", handlers.APIPostBatchHandler(store))
+	r.With(middleware.IPTrustedMiddleware).Get("/api/internal/stats", handlers.APIInternalGetStatsHandler(store))
 
 	r.Get("/{id}", handlers.GetRequestHandler(store))
 	r.Get("/ping", handlers.DatabasePing())

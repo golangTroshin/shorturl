@@ -181,3 +181,28 @@ func StartDeleteWorker(store storage.Storage) {
 		}
 	}
 }
+
+// APIInternalGetStatsHandler returns an HTTP handler that provides statistics
+// about stored URLs and users. This handler fetches statistics from the provided
+// storage and returns them in JSON format.
+func APIInternalGetStatsHandler(store storage.Storage) http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		stats, err := store.GetStats(r.Context())
+		if err != nil {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		w.Header().Set("Content-Type", ContentTypeJSON)
+
+		log.Printf("responseBodies %v", stats)
+
+		if err := json.NewEncoder(w).Encode(&stats); err != nil {
+			log.Printf("Unable to write reponse: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	return http.HandlerFunc(fn)
+}
