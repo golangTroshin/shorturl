@@ -10,11 +10,12 @@ import (
 	"testing"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
+	"github.com/golangTroshin/shorturl/internal/app/service"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 	"github.com/stretchr/testify/require"
 )
 
-func TestPostRequestHandler(t *testing.T) {
+func TestShortenURL(t *testing.T) {
 	type want struct {
 		code        int
 		contentType string
@@ -51,7 +52,8 @@ func TestPostRequestHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		store := storage.NewMemoryStore()
-		router := Router(store)
+		svc := service.NewURLService(store)
+		router := Router(svc)
 
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
 		r.Header.Set("Content-Type", "text/plain")
@@ -87,7 +89,7 @@ func TestPostRequestHandler(t *testing.T) {
 	}
 }
 
-func TestAPIPostHandler(t *testing.T) {
+func TestAPIShortenURL(t *testing.T) {
 	type want struct {
 		code        int
 		contentType string
@@ -135,7 +137,8 @@ func TestAPIPostHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		store := storage.NewMemoryStore()
-		router := Router(store)
+		svc := service.NewURLService(store)
+		router := Router(svc)
 
 		r := httptest.NewRequest(http.MethodPost, "/api/shorten", strings.NewReader(tt.body))
 		r.Header.Set("Content-Type", "application/json")
@@ -176,7 +179,7 @@ func TestAPIPostHandler(t *testing.T) {
 	}
 }
 
-func TestGetRequestHandler(t *testing.T) {
+func TestGetOriginalURL(t *testing.T) {
 	type want struct {
 		code        int
 		contentType string
@@ -197,7 +200,7 @@ func TestGetRequestHandler(t *testing.T) {
 			},
 		},
 		{
-			name:       "get_request_not_existed_index_response_empty_location_header_status_400",
+			name:       "get_request_not_existed_index_response_empty_location_header_status_404",
 			requestURI: "/aHR0cHM63444",
 			want: want{
 				code:        http.StatusNotFound,
@@ -216,35 +219,43 @@ func TestGetRequestHandler(t *testing.T) {
 		},
 	}
 
+	// Ensure the configuration is parsed
 	if err := config.ParseFlags(); err != nil {
-		t.Fatalf("error ocured while parsing flags: %v", err)
+		t.Fatalf("error occurred while parsing flags: %v", err)
 	}
 
 	for _, tt := range tests {
-		store := storage.NewMemoryStore()
-		store.Set(context.Background(), "https://practicum.yandex.ru/")
-		router := Router(store)
+		t.Run(tt.name, func(t *testing.T) {
+			store := storage.NewMemoryStore()
+			// Pre-populate store with test data
+			store.Set(context.Background(), "https://practicum.yandex.ru/")
+			svc := service.NewURLService(store)
+			router := Router(svc)
 
-		r := httptest.NewRequest(http.MethodGet, tt.requestURI, nil)
-		r.Header.Set("Content-Type", "text/plain")
-		w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, tt.requestURI, nil)
+			r.Header.Set("Content-Type", "text/plain")
+			w := httptest.NewRecorder()
 
-		router.ServeHTTP(w, r)
-		result := w.Result()
+			router.ServeHTTP(w, r)
+			result := w.Result()
 
-		if tt.want.code != result.StatusCode {
-			t.Errorf("[%s] codes are not equal: expected: %d, result: %d ", tt.name, tt.want.code, result.StatusCode)
-		}
+			// Validate status code
+			if tt.want.code != result.StatusCode {
+				t.Errorf("[%s] codes are not equal: expected: %d, result: %d", tt.name, tt.want.code, result.StatusCode)
+			}
 
-		if tt.want.contentType != result.Header.Get("Content-Type") {
-			t.Errorf("[%s] content types are not equal: expected: %s, result: %s ", tt.name, tt.want.contentType, result.Header.Get("Content-Type"))
-		}
+			// Validate content type
+			if tt.want.contentType != result.Header.Get("Content-Type") {
+				t.Errorf("[%s] content types are not equal: expected: %s, result: %s", tt.name, tt.want.contentType, result.Header.Get("Content-Type"))
+			}
 
-		if tt.want.location != result.Header.Get("Location") {
-			t.Errorf("[%s] locations are not equal: expected: %s, result: %s ", tt.name, tt.want.location, result.Header.Get("Location"))
-		}
+			// Validate location header
+			if tt.want.location != result.Header.Get("Location") {
+				t.Errorf("[%s] locations are not equal: expected: %s, result: %s", tt.name, tt.want.location, result.Header.Get("Location"))
+			}
 
-		err := result.Body.Close()
-		require.NoError(t, err)
+			err := result.Body.Close()
+			require.NoError(t, err)
+		})
 	}
 }

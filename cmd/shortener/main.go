@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -15,11 +16,17 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/handlers"
+	grpcServer "github.com/golangTroshin/shorturl/internal/app/grpc/handlers"
+	interceptor "github.com/golangTroshin/shorturl/internal/app/grpc/interceptor"
+	shortener "github.com/golangTroshin/shorturl/internal/app/grpc/proto"
+	"github.com/golangTroshin/shorturl/internal/app/service"
+
 	"github.com/golangTroshin/shorturl/internal/app/helpers"
+	"github.com/golangTroshin/shorturl/internal/app/http/handlers"
+	"github.com/golangTroshin/shorturl/internal/app/http/middleware"
 	"github.com/golangTroshin/shorturl/internal/app/logger"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
-	"github.com/golangTroshin/shorturl/internal/app/storage"
+	storageSvc "github.com/golangTroshin/shorturl/internal/app/storage"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -32,8 +39,8 @@ var (
 //
 // It performs the following tasks:
 //   - Parses configuration values from flags and environment variables using `config.ParseFlags`.
-//   - Initializes the storage system based on the provided configuration using `storage.GetStorageByConfig`.
-//   - Sets up a background worker for URL deletions using `handlers.StartDeleteWorker`.
+//   - Initializes the storage system based on the provided configuration using `storageSvc.GetStorageByConfig`.
+//   - Sets up a background worker for URL deletions using `service.StartDeleteWorker`.
 //   - Starts the HTTP server with routes defined in the `Router` function.
 //
 // Logs errors if configuration parsing, storage initialization, or server startup fails.
@@ -47,21 +54,44 @@ func main() {
 		log.Printf("error occurred while parsing flags: %v", err)
 	}
 
-	store, err := storage.GetStorageByConfig()
+	storage, err := storageSvc.GetStorageByConfig()
+	svc := service.NewURLService(storage)
+
 	if err != nil {
 		log.Printf("failed to initialize storage: %v", err)
 	}
-	defer storage.CloseDB()
+	defer storageSvc.CloseDB()
 
-	go handlers.StartDeleteWorker(store)
+	go service.StartDeleteWorker(storage)
 
 	// Create context with cancellation
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
+	// Start gRPC server
+	grpcListener, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	// Create a gRPC server with interceptors
+	grpcSrv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			interceptor.GiveAuthTokenToUserInterceptor, // Generates the token
+			interceptor.CheckAuthTokenInterceptor,      // Validates the token
+		),
+	)
+	shortener.RegisterShortenerServer(grpcSrv, grpcServer.NewShortenerServer(svc))
+	go func() {
+		log.Println("gRPC server is running on :50051")
+		if err := grpcSrv.Serve(grpcListener); err != nil {
+			log.Fatalf("failed to serve gRPC: %v", err)
+		}
+	}()
+
+	// Start HTTP server
 	srv := &http.Server{
 		Addr:    config.Options.FlagServiceAddress,
-		Handler: Router(store),
+		Handler: Router(svc),
 	}
 
 	go func() {
@@ -115,24 +145,24 @@ func main() {
 //   - Validates and provides authentication tokens for certain routes using `middleware.GiveAuthTokenToUser` and `middleware.CheckAuthToken`.
 //
 // Parameters:
-//   - store: An implementation of the `storage.Storage` interface used for storing and retrieving URL data.
+//   - storage: An implementation of the `storageSvc.Storage` interface used for storing and retrieving URL data.
 //
 // Returns:
 //   - A configured `chi.Router` instance.
-func Router(store storage.Storage) chi.Router {
+func Router(svc service.Service) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.GzipMiddleware, logger.LoggingWrapper)
 
-	r.With(middleware.GiveAuthTokenToUser).Post("/", handlers.PostRequestHandler(store))
-	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten", handlers.APIPostHandler(store))
-	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten/batch", handlers.APIPostBatchHandler(store))
-	r.With(middleware.IPTrustedMiddleware).Get("/api/internal/stats", handlers.APIInternalGetStatsHandler(store))
+	r.With(middleware.GiveAuthTokenToUser).Post("/", handlers.ShortenURL(svc))
+	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten", handlers.APIShortenURL(svc))
+	r.With(middleware.GiveAuthTokenToUser).Post("/api/shorten/batch", handlers.APIPostBatchHandler(svc))
+	r.With(middleware.IPTrustedMiddleware).Get("/api/internal/stats", handlers.APIInternalGetStatsHandler(svc))
 
-	r.Get("/{id}", handlers.GetRequestHandler(store))
-	r.Get("/ping", handlers.DatabasePing())
-	r.With(middleware.CheckAuthToken).Get("/api/user/urls", handlers.GetURLsByUserHandler(store))
-	r.With(middleware.CheckAuthToken).Delete("/api/user/urls", handlers.APIDeleteUrlsHandler(store))
+	r.Get("/{id}", handlers.GetOriginalURL(svc))
+	r.Get("/ping", handlers.Ping(svc))
+	r.With(middleware.CheckAuthToken).Get("/api/user/urls", handlers.GetUserURLs(svc))
+	r.With(middleware.CheckAuthToken).Delete("/api/user/urls", handlers.APIDeleteUrlsHandler(svc))
 
 	return r
 }

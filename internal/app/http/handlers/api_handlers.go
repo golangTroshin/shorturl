@@ -7,24 +7,24 @@ import (
 	"net/http"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/service"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 )
 
 // ContentTypeJSON defines the Content-Type for JSON responses.
 const ContentTypeJSON = "application/json"
 
-// APIPostHandler returns an HTTP handler for creating a shortened URL.
+// APIShortenURL returns an HTTP handler for creating a shortened URL.
 //
 // This handler processes a POST request with a JSON payload containing the original URL.
-// It generates a shortened URL and returns it in the response.
+// It generates a shortened URL and returns it in the response using the provided service.
 //
 // Parameters:
-//   - store: The storage interface for managing URL persistence.
+//   - svc: The URL service for handling business logic.
 //
 // Returns:
 //   - An `http.HandlerFunc` that handles the URL shortening request.
-func APIPostHandler(store storage.Storage) http.HandlerFunc {
+func APIShortenURL(svc service.Service) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		var url storage.RequestURL
 
@@ -35,7 +35,7 @@ func APIPostHandler(store storage.Storage) http.HandlerFunc {
 
 		status := http.StatusCreated
 
-		urlObj, err := store.Set(r.Context(), url.URL)
+		urlObj, err := svc.ShortenURL(r.Context(), url.URL)
 		if err != nil {
 			var target *storage.InsertConflictError
 
@@ -63,14 +63,14 @@ func APIPostHandler(store storage.Storage) http.HandlerFunc {
 // APIPostBatchHandler returns an HTTP handler for creating multiple shortened URLs in a batch.
 //
 // This handler processes a POST request with a JSON array payload containing multiple original URLs.
-// It generates shortened URLs for each input and returns them in the response.
+// It generates shortened URLs for each input and returns them in the response using the provided service.
 //
 // Parameters:
-//   - store: The storage interface for managing URL persistence.
+//   - svc: The URL service for handling business logic.
 //
 // Returns:
 //   - An `http.HandlerFunc` that handles the batch URL shortening request.
-func APIPostBatchHandler(store storage.Storage) http.HandlerFunc {
+func APIPostBatchHandler(svc service.Service) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		var requestBodies []storage.RequestBodyBanch
 		err := json.NewDecoder(r.Body).Decode(&requestBodies)
@@ -79,7 +79,7 @@ func APIPostBatchHandler(store storage.Storage) http.HandlerFunc {
 			return
 		}
 
-		urlObjs, err := store.SetBatch(r.Context(), requestBodies)
+		urlObjs, err := svc.BatchShortenURLs(r.Context(), requestBodies)
 		log.Printf("urlObjs %v", urlObjs)
 		if err != nil {
 			log.Println(err)
@@ -116,14 +116,14 @@ func APIPostBatchHandler(store storage.Storage) http.HandlerFunc {
 // APIDeleteUrlsHandler returns an HTTP handler for deleting a batch of URLs for a user.
 //
 // This handler processes a DELETE request with a JSON array payload containing URL IDs to delete.
-// The URLs are removed from the storage associated with the authenticated user.
+// The URLs are removed using the provided service.
 //
 // Parameters:
-//   - store: The storage interface for managing URL persistence.
+//   - svc: The URL service for handling business logic.
 //
 // Returns:
 //   - An `http.HandlerFunc` that handles the batch URL deletion request.
-func APIDeleteUrlsHandler(store storage.Storage) http.HandlerFunc {
+func APIDeleteUrlsHandler(svc service.Service) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		var urlIDs []string
 		err := json.NewDecoder(r.Body).Decode(&urlIDs)
@@ -132,15 +132,12 @@ func APIDeleteUrlsHandler(store storage.Storage) http.HandlerFunc {
 			return
 		}
 
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
-		if !ok || userID == "" {
-			log.Printf("Wrong userID: %v", userID)
+		err = svc.DeleteUserURLs(r.Context(), urlIDs)
+
+		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		log.Printf("urls: %v, user: %v", urlIDs, userID)
-
-		deleteChan <- deleteRequest{URLIDs: urlIDs, UserID: userID}
 
 		w.WriteHeader(http.StatusAccepted)
 	}
@@ -148,46 +145,19 @@ func APIDeleteUrlsHandler(store storage.Storage) http.HandlerFunc {
 	return http.HandlerFunc(fn)
 }
 
-// deleteRequest represents a request to delete URLs for a user.
+// APIInternalGetStatsHandler returns an HTTP handler that provides statistics
+// about stored URLs and users.
 //
-// Fields:
-//   - URLIDs: A slice of URL IDs to be deleted.
-//   - UserID: The ID of the user requesting the deletion.
-type deleteRequest struct {
-	URLIDs []string
-	UserID string
-}
-
-// deleteChan is a buffered channel used for queuing URL deletion requests.
-var deleteChan = make(chan deleteRequest, 100)
-
-// StartDeleteWorker starts a worker that processes URL deletion requests from the `deleteChan`.
-//
-// This worker listens for `deleteRequest` objects on the channel and performs batch URL deletions
-// using the provided storage interface.
+// This handler fetches statistics from the service and returns them in JSON format.
 //
 // Parameters:
-//   - store: The storage interface for managing URL persistence.
+//   - svc: The URL service for handling business logic.
 //
-// Usage:
-//
-//	This function is typically started as a goroutine.
-func StartDeleteWorker(store storage.Storage) {
-	for req := range deleteChan {
-		err := store.BatchDeleteURLs(req.UserID, req.URLIDs)
-
-		if err != nil {
-			log.Printf("Error deleting URLs for user %v: %v", req.UserID, err)
-		}
-	}
-}
-
-// APIInternalGetStatsHandler returns an HTTP handler that provides statistics
-// about stored URLs and users. This handler fetches statistics from the provided
-// storage and returns them in JSON format.
-func APIInternalGetStatsHandler(store storage.Storage) http.HandlerFunc {
+// Returns:
+//   - An `http.HandlerFunc` that handles the statistics request.
+func APIInternalGetStatsHandler(svc service.Service) http.HandlerFunc {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		stats, err := store.GetStats(r.Context())
+		stats, err := svc.GetStats(r.Context())
 		if err != nil {
 			w.WriteHeader(http.StatusNoContent)
 			return

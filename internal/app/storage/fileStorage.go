@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/http/middleware"
 )
 
 // FileStore represents the file-based storage for URLs.

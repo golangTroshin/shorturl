@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/golangTroshin/shorturl/internal/app/handlers"
 	"github.com/golangTroshin/shorturl/internal/app/helpers"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/http/handlers"
+	"github.com/golangTroshin/shorturl/internal/app/http/middleware"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 	"github.com/golangTroshin/shorturl/internal/mocks"
 )
@@ -39,7 +39,8 @@ func BenchmarkAPIPostHandler(b *testing.B) {
 	defer ctrl.Finish()
 
 	mockStore := mocks.NewMockStorage(ctrl)
-	handler := handlers.APIPostHandler(mockStore)
+	mockService := mocks.NewMockService(ctrl)
+	handler := handlers.APIShortenURL(mockService)
 
 	mockStore.EXPECT().
 		Set(gomock.Any(), "https://example.com").
@@ -63,7 +64,8 @@ func BenchmarkAPIPostBatchHandler(b *testing.B) {
 	defer ctrl.Finish()
 
 	mockStore := mocks.NewMockStorage(ctrl)
-	handler := handlers.APIPostBatchHandler(mockStore)
+	mockService := mocks.NewMockService(ctrl)
+	handler := handlers.APIPostBatchHandler(mockService)
 
 	requestBodies := []storage.RequestBodyBanch{
 		{CorrelationID: "1", OriginalURL: "https://example.com"},
@@ -94,7 +96,8 @@ func BenchmarkAPIDeleteUrlsHandler(b *testing.B) {
 	defer ctrl.Finish()
 
 	mockStore := mocks.NewMockStorage(ctrl)
-	handler := handlers.APIDeleteUrlsHandler(mockStore)
+	mockService := mocks.NewMockService(ctrl)
+	handler := handlers.APIDeleteUrlsHandler(mockService)
 
 	urlIDs := []string{"short1", "short2"}
 	userID := "user1"
@@ -122,7 +125,8 @@ func BenchmarkPostRequestHandler(b *testing.B) {
 	defer ctrl.Finish()
 
 	mockStore := mocks.NewMockStorage(ctrl)
-	handler := handlers.PostRequestHandler(mockStore)
+	mockService := mocks.NewMockService(ctrl)
+	handler := handlers.ShortenURL(mockService)
 
 	mockStore.EXPECT().
 		Set(gomock.Any(), "https://example.com").
@@ -144,7 +148,8 @@ func BenchmarkGetRequestHandler(b *testing.B) {
 	defer ctrl.Finish()
 
 	mockStore := mocks.NewMockStorage(ctrl)
-	handler := handlers.GetRequestHandler(mockStore)
+	mockService := mocks.NewMockService(ctrl)
+	handler := handlers.GetOriginalURL(mockService)
 
 	mockStore.EXPECT().
 		Get(gomock.Any(), "EAaArVRs").
@@ -165,7 +170,8 @@ func BenchmarkGetURLsByUserHandler(b *testing.B) {
 	defer ctrl.Finish()
 
 	mockStore := mocks.NewMockStorage(ctrl)
-	handler := handlers.GetURLsByUserHandler(mockStore)
+	mockService := mocks.NewMockService(ctrl)
+	handler := handlers.GetUserURLs(mockService)
 
 	mockStore.EXPECT().
 		GetByUserID(gomock.Any(), "user123").

@@ -1,17 +1,13 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/go-chi/chi"
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
-	"github.com/golangTroshin/shorturl/internal/app/storage"
+	"github.com/golangTroshin/shorturl/internal/app/service"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -31,36 +27,24 @@ const ContentTypePlainText = "text/plain"
 //
 // Returns:
 //   - http.HandlerFunc: A handler function to process the request.
-func PostRequestHandler(store storage.Storage) http.HandlerFunc {
-	fn := func(w http.ResponseWriter, r *http.Request) {
+func ShortenURL(svc service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
 			http.Error(w, "Empty body", http.StatusBadRequest)
 			return
 		}
 
-		status := http.StatusCreated
-
-		url, err := store.Set(r.Context(), string(body))
+		URL, err := svc.ShortenURL(r.Context(), string(body))
 		if err != nil {
-			var target *storage.InsertConflictError
-
-			if errors.As(err, &target) {
-				status = http.StatusConflict
-			}
+			http.Error(w, "Failed to shorten URL", http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", ContentTypePlainText)
-		w.WriteHeader(status)
-
-		_, err = w.Write([]byte(config.Options.FlagBaseURL + "/" + url.ShortURL))
-		if err != nil {
-			log.Printf("Unable to write reponse: %v", err)
-			http.Error(w, "Unable to write reponse", http.StatusNotFound)
-		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(config.Options.FlagBaseURL + "/" + URL.ShortURL))
 	}
-
-	return http.HandlerFunc(fn)
 }
 
 // GetRequestHandler handles HTTP GET requests to retrieve the original URL
@@ -79,35 +63,24 @@ func PostRequestHandler(store storage.Storage) http.HandlerFunc {
 //
 // Returns:
 //   - http.HandlerFunc: A handler function to process the request.
-func GetRequestHandler(store storage.Storage) http.HandlerFunc {
-	fn := func(w http.ResponseWriter, r *http.Request) {
+func GetOriginalURL(svc service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if id == "" {
 			http.Error(w, "Invalid URL", http.StatusBadRequest)
 			return
 		}
 
-		status := http.StatusTemporaryRedirect
-
-		val, err := store.Get(r.Context(), id)
+		originalURL, err := svc.GetOriginalURL(r.Context(), id)
 		if err != nil {
-			var target *storage.DeletedURLError
-
-			if errors.As(err, &target) {
-				status = http.StatusGone
-			} else {
-				http.Error(w, "No info about requested route", http.StatusNotFound)
-				return
-			}
-		} else {
-			w.Header().Set("Content-Type", ContentTypePlainText)
-			w.Header().Set("Location", val)
+			http.Error(w, "URL not found", http.StatusNotFound)
+			return
 		}
 
-		w.WriteHeader(status)
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Location", originalURL)
+		w.WriteHeader(http.StatusTemporaryRedirect)
 	}
-
-	return http.HandlerFunc(fn)
 }
 
 // GetURLsByUserHandler handles HTTP GET requests to retrieve all shortened URLs
@@ -128,44 +101,20 @@ func GetRequestHandler(store storage.Storage) http.HandlerFunc {
 //
 // Returns:
 //   - http.HandlerFunc: A handler function to process the request.
-func GetURLsByUserHandler(store storage.Storage) http.HandlerFunc {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
-		if !ok || userID == "" {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		urls, err := store.GetByUserID(r.Context(), userID)
+func GetUserURLs(svc service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		urls, err := svc.GetUserURLs(r.Context())
 		if err != nil || len(urls) == 0 {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		type responseGetByUserID struct {
-			ShortURL    string `json:"short_url"`
-			OriginalURL string `json:"original_url"`
-		}
 		w.Header().Set("Content-Type", ContentTypeJSON)
-		var responseBodies []responseGetByUserID
-		for _, url := range urls {
-			responseBody := responseGetByUserID{
-				ShortURL:    config.Options.FlagBaseURL + "/" + url.ShortURL,
-				OriginalURL: url.OriginalURL,
-			}
-			responseBodies = append(responseBodies, responseBody)
-		}
-
-		log.Printf("responseBodies %v", responseBodies)
-
-		if err := json.NewEncoder(w).Encode(&responseBodies); err != nil {
-			log.Printf("Unable to write reponse: %v", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		if err := json.NewEncoder(w).Encode(urls); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 			return
 		}
 	}
-
-	return http.HandlerFunc(fn)
 }
 
 // DatabasePing handles HTTP GET requests to check the health of the database connection.
@@ -179,22 +128,14 @@ func GetURLsByUserHandler(store storage.Storage) http.HandlerFunc {
 //
 // Returns:
 //   - http.HandlerFunc: A handler function to process the request.
-func DatabasePing() http.HandlerFunc {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		db, err := sql.Open("pgx", config.Options.DatabaseDsn)
-
-		if err != nil {
-			http.Error(w, "Unable to connect to database", http.StatusInternalServerError)
+func Ping(svc service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := svc.PingDatabase(r.Context()); err != nil {
+			http.Error(w, "Database is unreachable", http.StatusInternalServerError)
+			return
 		}
 
-		defer db.Close()
-
-		err = db.Ping()
-		if err != nil {
-			log.Printf("Unable to write reponse: %v", err)
-			http.Error(w, "Unable to reach database", http.StatusInternalServerError)
-		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("Database is healthy"))
 	}
-
-	return http.HandlerFunc(fn)
 }

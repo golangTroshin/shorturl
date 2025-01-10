@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/http/middleware"
 	"github.com/lib/pq"
 )
 

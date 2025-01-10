@@ -9,14 +9,16 @@ import (
 	"net/http/httptest"
 
 	"github.com/go-chi/chi"
-	"github.com/golangTroshin/shorturl/internal/app/handlers"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/http/handlers"
+	"github.com/golangTroshin/shorturl/internal/app/http/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/service"
 	"github.com/golangTroshin/shorturl/internal/app/storage"
 )
 
-func ExampleAPIPostHandler() {
+func ExampleAPIShortenURL() {
 	store := storage.NewMemoryStore()
-	handler := handlers.APIPostHandler(store)
+	svc := service.NewURLService(store)
+	handler := handlers.APIShortenURL(svc)
 
 	requestBody := map[string]string{"url": "https://example.com"}
 	body, _ := json.Marshal(requestBody)
@@ -39,7 +41,8 @@ func ExampleAPIPostHandler() {
 
 func ExampleAPIPostBatchHandler() {
 	store := storage.NewMemoryStore()
-	handler := handlers.APIPostBatchHandler(store)
+	svc := service.NewURLService(store)
+	handler := handlers.APIPostBatchHandler(svc)
 
 	requestBody := []map[string]string{
 		{"correlation_id": "1", "original_url": "https://example.com"},
@@ -77,7 +80,8 @@ func ExampleAPIPostBatchHandler() {
 
 func ExampleAPIDeleteUrlsHandler() {
 	store := storage.NewMemoryStore()
-	handler := handlers.APIDeleteUrlsHandler(store)
+	svc := service.NewURLService(store)
+	handler := handlers.APIDeleteUrlsHandler(svc)
 
 	ctx := context.WithValue(context.Background(), middleware.UserIDKey, "user1")
 	store.Set(ctx, "https://example.com")
@@ -101,9 +105,10 @@ func ExampleAPIDeleteUrlsHandler() {
 	// Status Code: 202
 }
 
-func ExamplePostRequestHandler() {
+func ExampleShortenURL() {
 	store := storage.NewMemoryStore()
-	handler := handlers.PostRequestHandler(store)
+	svc := service.NewURLService(store)
+	handler := handlers.ShortenURL(svc)
 
 	requestBody := []byte("https://example.com")
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(requestBody))
@@ -122,13 +127,14 @@ func ExamplePostRequestHandler() {
 	// Response Body: http://localhost:8080/EAaArVRs
 }
 
-func ExampleGetRequestHandler() {
+func ExampleGetOriginalURL() {
 	store := storage.NewMemoryStore()
+	svc := service.NewURLService(store)
 
 	ctx := context.WithValue(context.Background(), middleware.UserIDKey, "test-user-id")
 
 	store.Set(ctx, "https://example.com")
-	handler := handlers.GetRequestHandler(store)
+	handler := handlers.GetOriginalURL(svc)
 
 	r := chi.NewRouter()
 	r.Get("/{id}", handler)

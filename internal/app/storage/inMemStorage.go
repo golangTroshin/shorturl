@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/http/middleware"
 )
 
 // MemoryStore represents an in-memory storage for URLs.
