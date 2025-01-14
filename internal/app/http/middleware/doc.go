@@ -32,7 +32,7 @@
 //	import (
 //	    "net/http"
 //	    "github.com/go-chi/chi"
-//	    "github.com/golangTroshin/shorturl/internal/app/middleware"
+//	    "github.com/golangTroshin/shorturl/internal/app/http/middleware"
 //	)
 //
 //	func main() {

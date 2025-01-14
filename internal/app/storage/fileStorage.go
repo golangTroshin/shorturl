@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/http/middleware"
 )
 
 // FileStore represents the file-based storage for URLs.
@@ -239,4 +239,24 @@ func (c *Consumer) ReadURL() (*URL, error) {
 // Close closes the file handle for the Consumer.
 func (c *Consumer) Close() error {
 	return c.file.Close()
+}
+
+// GetStats retrieves service statistic
+func (store *FileStore) GetStats(_ context.Context) (Stats, error) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	var stats Stats
+
+	stats.Urls = len(store.urlList)
+
+	userIDSet := make(map[string]struct{})
+
+	for _, url := range store.urlList {
+		userIDSet[url.UserID] = struct{}{}
+	}
+
+	stats.Users = len(userIDSet)
+
+	return stats, nil
 }

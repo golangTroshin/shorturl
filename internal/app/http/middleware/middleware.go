@@ -3,8 +3,12 @@ package middleware
 import (
 	"compress/gzip"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"strings"
+
+	"github.com/golangTroshin/shorturl/internal/app/config"
 )
 
 var (
@@ -133,6 +137,34 @@ func GzipMiddleware(h http.Handler) http.Handler {
 	})
 }
 
+// IPTrustedMiddleware is a middleware that restricts access to handlers based on the client's IP address.
+// It checks if the IP address provided in the `X-Real-IP` request header falls within a trusted subnet
+// defined by `config.Options.TrustedSubnet`.
+//
+// If the trusted subnet is not specified or the client's IP is not within the allowed range, the middleware
+// responds with HTTP 403 Forbidden.
+func IPTrustedMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if config.Options.TrustedSubnet == "" {
+			http.Error(w, "no specified TrustedSubnet", http.StatusForbidden)
+			return
+		}
+
+		clientIP := r.Header.Get("X-Real-IP")
+		if clientIP == "" {
+			http.Error(w, "X-Real-IP header missing", http.StatusForbidden)
+			return
+		}
+
+		if !isIPTrusted(clientIP) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
 func isEncodingTypeAllowed(acceptEncoding []string) bool {
 	for _, value := range acceptEncoding {
 		if _, ok := allowedEncodingTypes[value]; ok {
@@ -146,4 +178,21 @@ func isContentTypeAllowed(contentType string) bool {
 	_, ok := allowedContentTypes[contentType]
 
 	return ok
+}
+
+// isIPTrusted checks if the given IP is within the trusted subnet
+func isIPTrusted(ip string) bool {
+	_, trustedNet, err := net.ParseCIDR(config.Options.TrustedSubnet)
+	if err != nil {
+		log.Printf("Error parsing trusted subnet: %v\n", err)
+		return false
+	}
+
+	clientIP := net.ParseIP(ip)
+	if clientIP == nil {
+		log.Printf("Invalid IP address: %s\n", ip)
+		return false
+	}
+
+	return trustedNet.Contains(clientIP)
 }

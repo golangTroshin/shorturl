@@ -22,6 +22,7 @@ type ConfigStruct struct {
 	DatabaseDsn     string `env:"DATABASE_DSN" json:"database_dsn"`           // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
 	EnableHTTPS     bool   `env:"ENABLE_HTTPS" json:"enable_https"`           // EnableHTTPS: Is https enable
 	ConfigPath      string `env:"CONFIG"`                                     // ConfigPath: config file path
+	TrustedSubnet   string `env:"TRUSTED_SUBNET"`                             // TrustedSubnet: config trusted subnet
 }
 
 // Vars Options and Config
@@ -34,6 +35,7 @@ var (
 		DatabaseDsn        string // DatabaseDsn: The connection string for the database (e.g., "postgres://user:password@localhost/db").
 		EnableHTTPS        bool   // EnableHTTPS: Is https enable
 		ConfigPath         string // ConfigPath: config file path
+		TrustedSubnet      string // TrustedSubnet: config trusted subnet
 	}
 
 	// Config contains the configuration values parsed from environment variables.
@@ -65,6 +67,8 @@ func ParseFlags() error {
 		flag.StringVar(&Options.DatabaseDsn, "d", "", "database connection")
 		flag.BoolVar(&Options.EnableHTTPS, "s", false, "enable https")
 		flag.StringVar(&Options.ConfigPath, "c", "", "config file path")
+		flag.StringVar(&Options.TrustedSubnet, "t", "192.168.1.0/24", "config trusted subnet")
+
 	})
 
 	if Config.ConfigPath != "" {
@@ -100,6 +104,10 @@ func ParseFlags() error {
 	}
 
 	Options.EnableHTTPS = Config.EnableHTTPS
+
+	if Config.TrustedSubnet != "" {
+		Options.TrustedSubnet = Config.TrustedSubnet
+	}
 
 	flag.Parse()
 

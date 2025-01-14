@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/golangTroshin/shorturl/internal/app/config"
-	"github.com/golangTroshin/shorturl/internal/app/middleware"
+	"github.com/golangTroshin/shorturl/internal/app/http/middleware"
 	"github.com/lib/pq"
 )
 
@@ -296,4 +296,28 @@ func createTableIfNotExists() error {
 
 	log.Println("table created or already exists.")
 	return nil
+}
+
+// GetStats retrieves service statistic
+func (store *DatabaseStore) GetStats(ctx context.Context) (Stats, error) {
+	query := `
+	SELECT COUNT(*) AS total_urls, 
+		   COUNT(DISTINCT user_id) AS unique_users 
+	FROM urls;
+`
+
+	var totalURLs int
+	var uniqueUsers int
+	err := DB.QueryRowContext(ctx, query).Scan(&totalURLs, &uniqueUsers)
+	if err != nil {
+		log.Printf("error getting stats: %v", err)
+		return Stats{}, err
+	}
+
+	log.Printf("Total URLs: %d, Unique Users: %d", totalURLs, uniqueUsers)
+
+	return Stats{
+		Urls:  totalURLs,
+		Users: uniqueUsers,
+	}, nil
 }
